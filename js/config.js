@@ -12,3 +12,8 @@ export const firebaseConfig = {
 export const BUDGET = 20;
 export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 100;
+
+// Where the start page's "Log in / Sign up" button goes when this device hasn't
+// visited an event yet: this year's event, "A Flavor Town Christmas".
+// Update it when you start next year's event.
+export const MAIN_EVENT_ID = "yPjSERPkjzstDpSJh0lx";

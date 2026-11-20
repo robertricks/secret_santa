@@ -935,3 +935,18 @@ body.landing .site-header .banner { visibility: hidden; }
 .deadline-icon { font-size: 26px; flex-shrink: 0; }
 .giftee-hero .deadline-note { margin: 12px auto 0; }
 .draft-status { margin: 0; font-size: 14px; font-weight: 700; background: #fff4cc; border: 2px dashed var(--ink); border-radius: 10px; padding: 6px 10px; }
+
+/* Start page: top-left "Log in / Sign up" back to your event */
+.header-action { display: none; }
+body.landing .site-header .banner { display: none; }
+body.landing .header-action {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  justify-self: start; max-width: 300px;
+}
+.back-to-event { font-size: clamp(18px, 2vw, 24px); padding: 14px 22px; animation: back-pulse 2.4s ease-in-out infinite; }
+.back-hint { color: #fff; font-weight: 700; font-size: 14px; text-shadow: 1px 1px 0 var(--ink); }
+@keyframes back-pulse { 0%, 100% { transform: rotate(-2deg) scale(1); } 50% { transform: rotate(-2deg) scale(1.05); } }
+@media (max-width: 900px) {
+  body.landing .header-action { grid-column: 1 / -1; justify-self: center; align-items: center; text-align: center; order: -1; }
+}
+.back-to-event { white-space: nowrap; }

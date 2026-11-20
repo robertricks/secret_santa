@@ -9,7 +9,7 @@ import {
   writeBatch, deleteField, arrayUnion, arrayRemove,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-import { firebaseConfig, BUDGET, MIN_PLAYERS, MAX_PLAYERS } from "./config.js";
+import { firebaseConfig, BUDGET, MIN_PLAYERS, MAX_PLAYERS, MAIN_EVENT_ID } from "./config.js";
 import { makeDraw, shuffle, applyDraft } from "./draw.js";
 import { roastFor } from "./roasts.js";
 import { confetti } from "./fx.js";
@@ -325,6 +325,17 @@ function renderLanding() {
   ]);
   // The photo lives in the intro card on this page, so the header keeps just the logo and tag.
   document.body.classList.add("landing");
+
+  // Top-left: get people who wandered here back to their event to log in or sign up.
+  let lastEvent = "";
+  try { lastEvent = localStorage.getItem("ss:lastEvent") || ""; } catch {}
+  const target = lastEvent || MAIN_EVENT_ID;
+  const slot = document.getElementById("headerAction");
+  if (slot && target) {
+    slot.replaceChildren(
+      h("a", { class: "btn pink back-to-event", href: `?e=${encodeURIComponent(target)}` }, "🔑 Log in / Sign up"),
+      h("span", { class: "back-hint" }, "Here to join or check your Secret Santa? Tap this."));
+  }
 }
 
 // ======================================================================
@@ -341,6 +352,9 @@ function startEvent() {
     }
     // "estimate" fills in pending server timestamps (e.g. right after "Draw names NOW")
     S.event = { id: snap.id, ...snap.data({ serverTimestamps: "estimate" }) };
+    // Remember this event on this device, and keep the logo pointing at it (not the start page).
+    try { localStorage.setItem("ss:lastEvent", snap.id); } catch {}
+    document.querySelector(".site-header .logo")?.setAttribute("href", `?e=${encodeURIComponent(snap.id)}`);
     S.eventPending = snap.metadata.hasPendingWrites;
     document.title = `${S.event.name} · Secret Santa`;
     render();
