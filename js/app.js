@@ -5,14 +5,14 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, doc, collection, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
-  addDoc, onSnapshot, query, orderBy, serverTimestamp, Timestamp, runTransaction,
+  onSnapshot, query, orderBy, serverTimestamp, Timestamp, runTransaction,
   writeBatch, deleteField, arrayUnion,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 import { firebaseConfig, BUDGET, MIN_PLAYERS, MAX_PLAYERS } from "./config.js";
 import { makeDraw, shuffle } from "./draw.js";
 import { roastFor } from "./roasts.js";
-import { confetti, drumroll, airhorn, ding, gobble, isSoundOn, setSound } from "./fx.js";
+import { confetti } from "./fx.js";
 
 // ======================================================================
 // Setup
@@ -198,17 +198,6 @@ function friendlyAuthError(err) {
 }
 
 // ======================================================================
-// Sound toggle
-// ======================================================================
-const soundBtn = document.getElementById("soundToggle");
-soundBtn.textContent = isSoundOn() ? "🔊" : "🔇";
-soundBtn.addEventListener("click", () => {
-  setSound(!isSoundOn());
-  soundBtn.textContent = isSoundOn() ? "🔊" : "🔇";
-  if (isSoundOn()) ding();
-});
-
-// ======================================================================
 // Landing: create an event
 // ======================================================================
 function renderLanding() {
@@ -279,7 +268,7 @@ function renderLanding() {
     h("section", { class: "card tilt-l" },
       h("span", { class: "big-emoji" }, "🎁🎄🦃"),
       h("h1", {}, "SECRET SANTA FOR THE GROUP CHAT"),
-      h("p", {}, "Everyone signs up with a name and a PIN. On draw day the site secretly matches everyone up. Chat anonymously with your Santa. On reveal day we find out who had whom, in the most dramatic way possible."),
+      h("p", {}, "Everyone signs up with a name and a PIN. On draw day the site secretly matches everyone up. You see who you're buying for and where to send it. On reveal day we find out who had whom, in the most dramatic way possible."),
       h("p", {}, h("b", {}, `$${BUDGET} max.`), " Go over and you get dragged to Turkey Court."),
     ),
     h("section", { class: "card yellow tilt-r" }, h("h2", {}, "Start a new Secret Santa"), form),
@@ -414,7 +403,11 @@ function render() {
   }
   if (S.phase === "open") app.append(...openView());
   else if (S.phase === "drawing") app.append(...drawingView());
-  else app.append(...santaView());
+  else {
+    app.append(...santaView());
+    const hero = app.querySelector(".giftee-hero");
+    if (hero && S.phase === "drawn") app.prepend(hero);
+  }
 }
 
 function headerCard() {
@@ -497,7 +490,7 @@ function guestView() {
   drawTabs();
 
   out.push(h("section", { class: "card pink tilt-r" },
-    !open ? h("p", {}, S.phase === "drawing" ? "Sign-ups are closed. Log in to see who you got." : "Sign-ups are closed. Log in to see your giftee and chat.") : null,
+    !open ? h("p", {}, S.phase === "drawing" ? "Sign-ups are closed. Log in to see who you got." : "Sign-ups are closed. Log in to see your giftee.") : null,
     tabs, body));
   out.push(people);
   out.push(adminLoginCard());
@@ -549,7 +542,7 @@ function adminView() {
   out.push(h("section", { class: "card" },
     h("h3", {}, "🆘 Someone forgot their PIN?"),
     h("p", {}, "PINs can't be reset. ", drawn
-      ? "Click 🔓 Peek next to their name and DM them their giftee + address. They can still get their own gift; they just can't log in to chat."
+      ? "Click 🔓 Peek next to their name and DM them their giftee + address. They'll still get their own gift."
       : "Remove their old account, then have them JOIN again with a slightly different name (like \"Bob 2\")."),
   ));
   queueMicrotask(updateAdminPeople);
@@ -682,7 +675,7 @@ async function peekGiftee(p, out) {
 function adminRedrawCard() {
   return h("section", { class: "card pink" },
     h("h2", {}, "🔁 REDRAW EVERYONE"),
-    h("p", {}, "Nuclear option. Everyone gets a new giftee, and all Santa chats start over. Use it only if something is badly broken, then tell the group chat."),
+    h("p", {}, "Nuclear option. Everyone gets a new giftee. Use it only if something is badly broken, then tell the group chat."),
     confirmBtn("🔁 Redraw", "REALLY redraw everyone?", "yellow", redraw));
 }
 
@@ -775,7 +768,6 @@ function joinForm() {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await joinAs(cred.user.uid, name, { deliveryType, deliveryInfo });
       confetti(120);
-      ding();
       toast("You're in! 🎉");
     } catch (ex) {
       console.error(ex);
@@ -820,7 +812,6 @@ function loginForm() {
       // Account exists but participant doc was removed (left the event): rejoin if still open.
       const p = await getDoc(doc(db, "events", eventId, "participants", cred.user.uid));
       if (!p.exists() && S.phase === "open") await joinAs(cred.user.uid, name, null);
-      ding();
     } catch (ex) {
       console.error(ex);
       err.textContent = friendlyAuthError(ex);
@@ -958,7 +949,7 @@ async function runDraw() {
       S.drawError = "impossible";
       return;
     }
-    // One chat "box" per giftee: their Santa and they share it.
+    // Box ids stay in assignments for compatibility (the chat feature was removed).
     const boxOf = new Map(ids.map((id) => [id, randId()]));
     const eventRef = doc(db, "events", eventId);
     await runTransaction(db, async (tx) => {
@@ -1007,7 +998,7 @@ function drawingView() {
 }
 
 // ---------------------------------------------------------------------
-// After the draw: your giftee, chats, reveal, turkey court
+// After the draw: your giftee, reveal, turkey court
 // ---------------------------------------------------------------------
 function santaView() {
   const out = [];
@@ -1021,17 +1012,21 @@ function santaView() {
 
   if (S.phase === "revealed") out.push(...revealedCards());
 
-  // Giftee card
-  const gifteeCard = h("section", { class: "card pink tilt-l center" });
+  // Giftee card: the main thing on the page
+  const budget = S.event.budget || BUDGET;
+  const budgetBanner = () => h("div", { class: "budget-banner" },
+    h("span", { class: "budget-amount" }, `$${budget}`),
+    h("span", {}, h("b", {}, "MAX. Do NOT go over."), ` Spend more than $${budget} and you're getting roasted like a turkey in Turkey Court 🦃🔥`));
+  const gifteeCard = h("section", { class: "card pink center giftee-hero" });
   const showGiftee = (fresh) => {
     gifteeCard.replaceChildren(
       h("h2", {}, "🎯 YOU'RE BUYING FOR"),
       h("div", { class: "giftee-name" }, nameOf(a.gifteeUid)),
       h("div", { id: "gifteeDelivery", style: "text-align:left" }),
-      h("p", { class: "muted", style: "margin-top:12px" }, `Remember: $${S.event.budget || BUDGET} max. Turkey Court is watching. 🦃`),
+      budgetBanner(),
     );
     updateGifteeDelivery();
-    if (fresh) { confetti(220); airhorn(); }
+    if (fresh) confetti(220);
   };
   if (seen("giftee") || S.phase === "revealed") {
     showGiftee(false);
@@ -1040,22 +1035,10 @@ function santaView() {
       h("h2", {}, "YOUR GIFTEE IS IN THIS BOX"),
       h("button", { class: "gift-box", type: "button", "aria-label": "Unwrap", onclick: () => { markSeen("giftee"); showGiftee(true); } }, "🎁"),
       h("p", {}, "Make sure nobody's looking at your screen. Then click it."),
+      budgetBanner(),
     );
   }
   out.push(gifteeCard);
-
-  out.push(chatCard({
-    title: `🤫 Chat with ${nameOf(a.gifteeUid)} (they don't know it's you)`,
-    box: a.santaBox, as: "santa", color: "yellow",
-    placeholder: "Ask about their size, their fave games…",
-    theirLabel: nameOf(a.gifteeUid), myLabel: "You (as their secret Santa 🤫)",
-  }));
-  out.push(chatCard({
-    title: S.phase === "revealed" ? "💌 Chat with your Santa (unmasked now!)" : "💌 Chat with YOUR Santa (anonymous)",
-    box: a.myBox, as: "giftee", color: "lime",
-    placeholder: "Drop hints. Beg. Bribe.",
-    theirLabel: "🤫 Your Secret Santa", myLabel: "You",
-  }));
 
   if (S.phase === "drawn") {
     out.push(h("section", { class: "card" },
@@ -1071,50 +1054,13 @@ function updateGifteeDelivery() {
   if (!box) return;
   const p = S.gifteePrivate;
   if (!p) {
-    box.replaceChildren(h("p", {}, "They haven't said where to send it. Ask them in the chat below 👇"));
+    box.replaceChildren(h("p", {}, "They haven't added where to send it yet. Check back soon."));
     return;
   }
   box.replaceChildren(
     h("p", {}, p.deliveryType === "physical" ? "📦 Ship it to:" : "💻 They want a virtual gift. Send it to:"),
     h("div", { class: "delivery" }, p.deliveryInfo),
   );
-}
-
-function chatCard({ title, box, as, color, placeholder, theirLabel, myLabel }) {
-  const log = h("div", { class: "chat-log" }, h("p", { class: "chat-empty" }, "No messages yet. Break the ice."));
-  const input = h("input", { maxlength: 1000, placeholder, "aria-label": "Message" });
-  const form = h("form", { class: "chat-form" }, input, h("button", { class: "btn pink small", type: "submit" }, "SEND"));
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const text = input.value.trim();
-    if (!text) return;
-    input.value = "";
-    try {
-      await addDoc(collection(db, "events", eventId, "boxes", box, "messages"), { from: as, text, at: serverTimestamp() });
-    } catch (ex) {
-      toast("Message failed: " + ex.message);
-      input.value = text;
-    }
-  });
-  let first = true;
-  const off = onSnapshot(query(collection(db, "events", eventId, "boxes", box, "messages"), orderBy("at")), (snap) => {
-    if (!snap.docs.length) return;
-    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-    log.replaceChildren(...snap.docs.map((d) => {
-      const m = d.data();
-      const mine = m.from === as;
-      return h("div", { class: "msg " + (mine ? "mine" : "theirs") }, h("span", { class: "who" }, mine ? myLabel : theirLabel), m.text);
-    }));
-    if (first || atBottom) log.scrollTop = log.scrollHeight;
-    if (!first && snap.docChanges().some((c) => c.type === "added" && c.doc.data().from !== as)) ding();
-    first = false;
-  }, (e) => console.warn("chat", e.code));
-  unsubs.user.push(off);
-  // stop listening if this card is replaced
-  const obs = new MutationObserver(() => { if (!log.isConnected) { off(); obs.disconnect(); } });
-  obs.observe(app, { childList: true });
-
-  return h("section", { class: `card ${color}` }, h("h2", {}, title), log, form);
 }
 
 // ---------------------------------------------------------------------
@@ -1124,7 +1070,7 @@ function revealedCards() {
   const revealCard = h("section", { class: "card blue tilt-r center" },
     h("span", { class: "big-emoji" }, "🥁"),
     h("h2", {}, "IT'S REVEAL TIME"),
-    h("p", {}, "Get everyone in a Discord call, share your screen, turn the sound UP."),
+    h("p", {}, "Get everyone in a Discord call and share your screen."),
     h("button", { class: "btn yellow huge", type: "button", onclick: startRevealShow }, "▶ START THE SHOW"),
   );
   const court = h("section", { class: "card yellow tilt-l" },
@@ -1149,9 +1095,7 @@ function loadRevealData() {
   }
   if (!S._flagsSub) {
     S._flagsSub = onSnapshot(collection(db, "events", eventId, "flags"), (s) => {
-      const before = S.flags.length;
       S.flags = s.docs.map((d) => ({ id: d.id, ...d.data() }));
-      if (S.flags.length > before && before > 0) gobble();
       updateCourt();
     }, (e) => console.warn("flags", e.code));
     unsubs.user.push(() => { S._flagsSub?.(); S._flagsSub = null; });
@@ -1185,7 +1129,6 @@ function updateCourt() {
           onclick: async () => {
             try {
               await setDoc(doc(db, "events", eventId, "flags", S.user.uid), { santaUid: mySanta, evidence: ev.value.trim(), at: serverTimestamp() });
-              gobble();
               confetti(80);
               toast(`${nameOf(mySanta)} has been dragged to Turkey Court. 🦃🔥`);
             } catch (e) { toast("Couldn't file: " + e.message); }
@@ -1254,7 +1197,6 @@ async function startRevealShow() {
       btn.textContent = "BACK TO THE SITE";
       btn.onclick = () => stage.remove();
       confetti(300);
-      airhorn();
       return;
     }
     const g = order[i];
@@ -1263,7 +1205,7 @@ async function startRevealShow() {
       q.replaceChildren("WHO WAS THE SECRET SANTA FOR…", h("span", { class: "giftee" }, nameOf(g)));
       a.className = "reveal-a";
       a.textContent = "❓❓❓";
-      btn.textContent = "🥁 DRUMROLL";
+      btn.textContent = "🥁 REVEAL";
       btn.disabled = false;
       state = "roll";
     } else if (state === "roll") {
@@ -1271,12 +1213,10 @@ async function startRevealShow() {
       a.className = "reveal-a drumroll";
       const names = S.participants.map((p) => p.name);
       const spin = setInterval(() => { a.textContent = names[(Math.random() * names.length) | 0] || "🎄"; }, 70);
-      drumroll(2.2);
       setTimeout(() => {
         clearInterval(spin);
         a.className = "reveal-a revealed";
         a.textContent = nameOf(santaOf[g]);
-        airhorn();
         confetti(220);
         btn.disabled = false;
         btn.textContent = i + 1 < order.length ? "NEXT VICTIM ➜" : "FINALE ➜";
