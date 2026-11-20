@@ -181,8 +181,10 @@ function computePhase() {
   const ev = S.event;
   if (!ev) return null;
   const now = Date.now();
-  if (ev.status === "open") return now >= toDate(ev.drawAt).getTime() ? "drawing" : "open";
-  return now >= toDate(ev.revealAt).getTime() ? "revealed" : "drawn";
+  const drawAt = toDate(ev.drawAt)?.getTime() ?? now;
+  const revealAt = toDate(ev.revealAt)?.getTime() ?? Infinity;
+  if (ev.status === "open") return now >= drawAt ? "drawing" : "open";
+  return now >= revealAt ? "revealed" : "drawn";
 }
 
 function friendlyAuthError(err) {
@@ -279,7 +281,7 @@ function renderLanding() {
 // Event page
 // ======================================================================
 function startEvent() {
-  unsubs.event = onSnapshot(doc(db, "events", eventId), (snap) => {
+  unsubs.event = onSnapshot(doc(db, "events", eventId), { includeMetadataChanges: true }, (snap) => {
     if (!snap.exists()) {
       app.replaceChildren(h("div", { class: "card pink" },
         h("h2", {}, "🕳️ No event here"),
@@ -287,7 +289,9 @@ function startEvent() {
         h("a", { class: "btn yellow", href: "./" }, "Start a new one")));
       return;
     }
-    S.event = { id: snap.id, ...snap.data() };
+    // "estimate" fills in pending server timestamps (e.g. right after "Draw names NOW")
+    S.event = { id: snap.id, ...snap.data({ serverTimestamps: "estimate" }) };
+    S.eventPending = snap.metadata.hasPendingWrites;
     document.title = `${S.event.name} · Secret Santa`;
     render();
   }, (e) => {
@@ -381,6 +385,8 @@ function subscribeAssignment() {
 function render() {
   if (!S.event || S.user === undefined) return;
   S.phase = computePhase();
+  // Wait until the server has confirmed the event (e.g. a just-changed draw time) before drawing.
+  if (S.phase === "drawing" && (S.me || S.isAdmin) && !S.drawing && !S.drawError && !S.eventPending) runDraw();
   const a = S.assignment;
   const ev = S.event;
   const key = [S.phase, S.user?.uid || "anon", S.isAdmin ? "admin" : S.me ? "member" : "guest",
@@ -389,8 +395,6 @@ function render() {
     ev.name, toDate(ev.drawAt)?.getTime(), toDate(ev.revealAt)?.getTime(), ev.status].join("|");
   if (key === currentView) return;
   currentView = key;
-
-  if (S.phase === "drawing" && (S.me || S.isAdmin) && !S.drawing && !S.drawError) runDraw();
 
   app.replaceChildren(headerCard());
   if (S.isAdmin) {
