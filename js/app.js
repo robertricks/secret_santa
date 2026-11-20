@@ -610,7 +610,9 @@ function rulesCard() {
     h("ol", { class: "rules" },
       rule(1, "Create a profile to participate", "Pick a name + PIN and tell us where your gift should go."),
       rule(2, "Become someone's Secret Santa", h("span", {}, "Who you're buying for is revealed on ", h("b", {}, day(S.event.drawAt)), ".")),
-      rule(3, "Buy and deliver a gift to them", `Ship it or send it virtually. $${S.event.budget || BUDGET} max, or Turkey Court awaits. 🦃`),
+      rule(3, "Buy and deliver a gift to them", h("span", {}, "Ship it or send it virtually, ideally by ",
+        h("b", {}, shopBy().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })),
+        ` (a week before the reveal). $${S.event.budget || BUDGET} max, or Turkey Court awaits. 🦃`)),
       rule(4, "Come back to find out who had you", h("span", {}, "The big reveal is on ", h("b", {}, day(S.event.revealAt)), ". 🥁"))),
   );
 }
@@ -1114,6 +1116,18 @@ async function logout() {
 // ---------------------------------------------------------------------
 // Open phase (member, before the draw)
 // ---------------------------------------------------------------------
+// "Buy your gift a week before the reveal" reminder, used on the player pages.
+function shopBy() {
+  return new Date(toDate(S.event.revealAt).getTime() - 7 * 86400000);
+}
+function deadlineNote() {
+  const fmt = (d) => d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  return h("div", { class: "deadline-note" },
+    h("span", { class: "deadline-icon" }, "🛒"),
+    h("span", {}, h("b", {}, "Shopping deadline: "), "try to buy (and ship) your gift by ",
+      h("b", {}, fmt(shopBy())), `, one week before the big reveal on ${fmt(toDate(S.event.revealAt))}.`));
+}
+
 function openView() {
   const drawAt = toDate(S.event.drawAt);
   const when = drawAt.toLocaleString(undefined, { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -1126,6 +1140,7 @@ function openView() {
     cd,
     h("p", { class: "hero-when" }, h("b", {}, when)),
     h("p", { class: "hero-note" }, "Come back to this page after that to see who you're buying for and where to send it. 🎯"),
+    deadlineNote(),
     budgetPill(),
     h("details", { class: "hero-mine" }, h("summary", {}, "🏠 Your address for your Secret Santa (check or edit)"), h("div", { id: "myDelivery" })),
     h("p", { class: "muted" }, "Logged in as ", h("b", {}, S.me.name), " · ",
@@ -1277,6 +1292,7 @@ function santaView() {
       h("h2", {}, "🎯 YOU'RE BUYING FOR"),
       h("div", { class: "giftee-name" }, nameOf(a.gifteeUid)),
       h("div", { id: "gifteeDelivery", style: "text-align:left" }),
+      S.phase === "drawn" ? deadlineNote() : null,
       budgetBanner(),
     );
     updateGifteeDelivery();
@@ -1296,7 +1312,7 @@ function santaView() {
 
   if (S.phase === "drawn") {
     out.push(h("section", { class: "card", "data-col": "b" },
-      h("h3", {}, "🏠 Your address (where your Secret Santa sends your gift):"),
+      h("h3", {}, "🏠 Your address for your Secret Santa"),
       h("div", { id: "myDelivery" })));
     queueMicrotask(updateMyDelivery);
   }

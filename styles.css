@@ -922,3 +922,15 @@ body.landing .site-header .banner { visibility: hidden; }
 .reassign-row b { min-width: 120px; }
 .reassign-pick { width: auto; min-width: 150px; font-size: 14px; padding: 4px 8px; border-width: 2px; }
 .reassign-warn { font-size: 13px; font-weight: 700; color: var(--red); }
+
+/* "Buy your gift a week before the reveal" reminder */
+.deadline-note {
+  display: flex; align-items: center; gap: 10px;
+  width: min(640px, 100%);
+  background: #fff; color: var(--ink);
+  border: 3px dashed var(--ink); border-radius: 12px;
+  padding: 10px 14px; text-align: left; line-height: 1.35;
+  font-size: 16px;
+}
+.deadline-icon { font-size: 26px; flex-shrink: 0; }
+.giftee-hero .deadline-note { margin: 12px auto 0; }
