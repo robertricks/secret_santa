@@ -308,9 +308,6 @@ function renderLanding() {
 
   layout([
     h("section", { class: "card tilt-l fill intro-card" },
-      h("div", { class: "intro-photo" },
-        h("img", { src: "assets/banner.jpg", width: 2000, height: 781, alt: "The Flavor Town crew's avatars in a colosseum, cheering two Santa-hatted warriors in a lightsaber duel" }),
-        h("span", { class: "photo-sticker" }, "🎄 THE FLAVOR TOWN CREW 🎄")),
       h("h1", {}, "SECRET SANTA FOR THE GROUP CHAT"),
       h("div", { class: "how-steps" },
         h("div", { class: "how-step red" }, h("span", { class: "how-icon" }, "📝"), h("b", {}, "1. JOIN"), h("span", {}, "Name + PIN. Pick 📦 address or 💻 virtual.")),
@@ -319,6 +316,9 @@ function renderLanding() {
       h("div", { class: "turkey-strip" },
         h("span", { class: "turkey-strip-amt" }, `$${BUDGET} MAX`),
         h("span", {}, "Go over and you get dragged to Turkey Court 🦃⚖️")),
+      h("div", { class: "intro-photo" },
+        h("img", { src: "assets/banner.jpg", width: 2000, height: 781, alt: "The Flavor Town crew's avatars in a colosseum, cheering two Santa-hatted warriors in a lightsaber duel" }),
+        h("span", { class: "photo-sticker" }, "🎄 THE FLAVOR TOWN CREW 🎄")),
     ),
     h("section", { class: "card yellow tilt-r", "data-col": "b" }, h("h2", {}, "Start a new Secret Santa"), form),
   ]);

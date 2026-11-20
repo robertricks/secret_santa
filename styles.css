@@ -826,3 +826,10 @@ body.landing .site-header .banner { visibility: hidden; }
 @media (min-width: 900px) {
   body.landing .col > .card.yellow { display: flex; flex-direction: column; justify-content: center; }
 }
+/* Photo sits at the bottom of the intro card; if it must be cropped, only the top is trimmed */
+.card.intro-card { padding: 18px 0 0; }
+.intro-photo { margin-top: auto; border-bottom: 0; border-top: 4px solid var(--ink); }
+.intro-photo img { object-position: 50% 100%; }
+.photo-sticker { top: -17px; bottom: auto; }
+.photo-sticker { left: auto; right: 14px; top: -15px; transform: rotate(3deg); }
+.intro-card .turkey-strip { margin-bottom: 8px; }
