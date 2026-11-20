@@ -563,7 +563,8 @@ function showWizard() {
   else if (W.step === "delivery" && open) card = wizDelivery();
   else if (W.step === "login") card = wizLogin();
   else card = wizIntro(open);
-  app.replaceChildren(h("div", { class: "wizard-wrap" }, h("div", { class: "wizard" }, card)));
+  const wide = card.classList.contains("intro-split");
+  app.replaceChildren(h("div", { class: "wizard-wrap" }, h("div", { class: "wizard" + (wide ? " wide" : "") }, card)));
   queueFit();
 }
 
@@ -584,7 +585,7 @@ function budgetPill() {
 
 function wizIntro(open) {
   const start = () => goStep(open ? "profile" : "login");
-  return h("div", { class: "intro" },
+  const left = h("div", { class: "intro" },
     h("button", { class: "brand intro-brand", type: "button", onclick: start, "aria-label": open ? "Start joining" : "Log in" },
       h("span", { class: "logo" }, "SECRET", h("br"), h("span", {}, "SANTA")),
       h("span", { class: "tagline" }, "A Flavor Town Christmas")),
@@ -594,6 +595,23 @@ function wizIntro(open) {
       open ? "🎁 TAP TO JOIN" : S.phase === "drawing" ? "🔓 LOG IN (names are being drawn)" : "🔓 LOG IN TO SEE WHO YOU GOT"),
     open ? h("button", { class: "link-btn intro-link", type: "button", onclick: () => goStep("login") }, "Already joined? Log in") : null,
     h("div", { class: "intro-org" }, adminLoginCard()),
+  );
+  return h("div", { class: "intro-split" }, left, rulesCard());
+}
+
+// The rules of Secret Santa, shown beside the intro on the share link's first page.
+function rulesCard() {
+  const day = (ts) => toDate(ts).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const rule = (n, title, text) => h("li", { class: "rule" },
+    h("span", { class: "rule-num" }, String(n)),
+    h("div", {}, h("b", {}, title), h("span", {}, text)));
+  return h("section", { class: "card rules-card" },
+    h("h2", {}, "📜 THE RULES OF SECRET SANTA"),
+    h("ol", { class: "rules" },
+      rule(1, "Create a profile to participate", "Pick a name + PIN and tell us where your gift should go."),
+      rule(2, "Become someone's Secret Santa", h("span", {}, "Who you're buying for is revealed on ", h("b", {}, day(S.event.drawAt)), ".")),
+      rule(3, "Buy and deliver a gift to them", `Ship it or send it virtually. $${S.event.budget || BUDGET} max, or Turkey Court awaits. 🦃`),
+      rule(4, "Come back to find out who had you", h("span", {}, "The big reveal is on ", h("b", {}, day(S.event.revealAt)), ". 🥁"))),
   );
 }
 
