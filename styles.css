@@ -950,3 +950,15 @@ body.landing .header-action {
   body.landing .header-action { grid-column: 1 / -1; justify-self: center; align-items: center; text-align: center; order: -1; }
 }
 .back-to-event { white-space: nowrap; }
+
+/* Join step 1: "remember your name AND PIN" warning */
+.remember-box {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--yellow); color: var(--ink);
+  border: 3px solid var(--red); border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  padding: 10px 14px; line-height: 1.35; font-size: 16px;
+  transform: rotate(-.6deg);
+}
+.remember-box b:first-child { font-family: var(--display); font-weight: 400; color: var(--red); font-size: 17px; }
+.remember-icon { font-size: 30px; flex-shrink: 0; animation: back-pulse 2.4s ease-in-out infinite; }
