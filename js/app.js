@@ -19,6 +19,44 @@ import { confetti } from "./fx.js";
 // ======================================================================
 const app = document.getElementById("app");
 
+// ----------------------------------------------------------------------
+// Fit to screen: scale the whole page so it exactly fills the window
+// height on laptops/desktops (no scrolling, no empty space). Phones scroll.
+// ----------------------------------------------------------------------
+const pageEl = document.getElementById("page");
+let fitZoom = 1;
+let fitting = false;
+function fitToScreen() {
+  if (!pageEl || fitting) return;
+  fitting = true;
+  try {
+    if (innerWidth < 760) {
+      fitZoom = 1;
+      pageEl.style.zoom = "";
+      return;
+    }
+    for (let i = 0; i < 6; i++) {
+      const hgt = pageEl.getBoundingClientRect().height;
+      if (!hgt) return;
+      const next = Math.min(1.6, Math.max(0.6, fitZoom * (innerHeight - 4) / hgt));
+      if (Math.abs(next - fitZoom) < 0.004) break;
+      fitZoom = next;
+      pageEl.style.zoom = String(fitZoom);
+    }
+  } finally {
+    fitting = false;
+  }
+}
+let fitQueued = false;
+function queueFit() {
+  if (fitQueued) return;
+  fitQueued = true;
+  setTimeout(() => { fitQueued = false; fitToScreen(); }, 40);
+}
+addEventListener("resize", queueFit);
+document.fonts?.ready.then(queueFit);
+if (window.ResizeObserver) new ResizeObserver(queueFit).observe(app);
+
 if (firebaseConfig.apiKey === "REPLACE_ME") {
   app.innerHTML = "";
   app.append(h("div", { class: "card yellow" },
