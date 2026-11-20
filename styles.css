@@ -683,3 +683,24 @@ main { padding-bottom: 10px; }
 @media (min-width: 900px) {
   .card.giftee-hero { display: flex; flex-direction: column; justify-content: center; }
 }
+
+/* --- header: photo left | logo front and center | gift tag right --- */
+.site-header { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.site-header .banner { justify-content: flex-start; }
+.site-header .brand { justify-self: center; padding: 10px 22px 8px; }
+.site-header .gift-tag { justify-self: end; max-width: 300px; }
+.logo { font-size: clamp(36px, 4vw, 60px); text-align: center; }
+.tagline { font-size: clamp(18px, 2vw, 30px); text-align: center; }
+@media (max-width: 900px) {
+  .site-header { grid-template-columns: 1fr 1fr; }
+  .site-header .banner { grid-column: 1 / -1; justify-content: center; }
+  .site-header .brand { justify-self: start; }
+  .site-header .gift-tag { justify-self: stretch; max-width: none; }
+}
+@media (max-width: 760px) {
+  .site-header { grid-template-columns: 1fr; }
+  .site-header .brand { justify-self: center; }
+  .logo { font-size: 34px; }
+  .tagline { font-size: 20px; }
+}
+@media (min-width: 901px) { .site-header .banner img { max-height: 30vh; } }
