@@ -9,7 +9,7 @@ A Secret Santa site for the Discord crew. Static files on GitHub Pages + a free 
 1. Someone opens the site and **starts an event** (name, draw date, reveal date) → gets a link to drop in Discord.
 2. Friends open the link and get a step-by-step welcome: tap the **Secret Santa** logo → pick a name + 6-digit PIN →
    choose 📦 shipping address or 💻 virtual → "You're in!" with the draw date and a countdown telling them when to come back.
-   On their page they can tick people they shouldn't draw (partner, roommate). Works both ways.
+   After joining, their page is just a big countdown to the draw (plus a small "where your gift goes" check/edit).
 3. At the draw time, the first person to open the page **automatically runs the draw**. No admin, nobody sees the list.
    The draw keeps 📦 address people with address people and 💻 virtual people with virtual people. It only crosses
    types when it has to (a type with just 1–2 people, or "don't draw" exclusions in the way), using as few
@@ -22,7 +22,7 @@ A Secret Santa site for the Discord crew. Static files on GitHub Pages + a free 
 
 Whoever starts an event sets an **organizer password**. Log in with it from the "🛠 Organizer? Log in here" link at the bottom of the event page. (It's a separate login, so the organizer can also JOIN as a normal player.)
 
-- **Before the draw:** see who joined, **Remove** duplicates/fakes (that account can't rejoin), edit the name and dates, or **🎰 Draw names NOW**.
+- **Before the draw:** see who joined (and 📦/💻), set **🚫 don't match** pairs (partners, roommates; works both ways), **Remove** duplicates/fakes (that account can't rejoin), edit the name and dates, or **🎰 Draw names NOW**.
 - **After the draw:** **Remove & patch** someone who drops out (their Santa takes over their giftee), **🔁 Redraw** everyone, or **🔓 Peek** at one person's giftee if they forgot their PIN, so you can DM it to them.
 - The organizer never sees the matches unless they click Peek.
 

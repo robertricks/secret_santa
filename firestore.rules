@@ -81,6 +81,10 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['exclusions', 'deliveryType'])
           && request.resource.data.exclusions is list && request.resource.data.exclusions.size() <= 100
           && request.resource.data.get('deliveryType', 'physical') in ['physical', 'virtual'];
+        // Organizer sets "don't match" pairs (partners, roommates) before the draw.
+        allow update: if isAdmin(e) && ev(e).status == 'open'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['exclusions'])
+          && request.resource.data.exclusions is list && request.resource.data.exclusions.size() <= 100;
         allow delete: if isAdmin(e)
           || (signedIn() && request.auth.uid == uid && ev(e).status == 'open' && request.time < ev(e).drawAt);
       }

@@ -833,3 +833,53 @@ body.landing .site-header .banner { visibility: hidden; }
 .photo-sticker { top: -17px; bottom: auto; }
 .photo-sticker { left: auto; right: 14px; top: -15px; transform: rotate(3deg); }
 .intro-card .turkey-strip { margin-bottom: 8px; }
+
+/* =====================================================================
+   Player page before the draw: the countdown, front and center
+   ===================================================================== */
+.card.countdown-hero {
+  width: min(980px, 100%);
+  justify-self: center;
+  margin: 0 auto;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 28px 24px 22px;
+  background: var(--blue);
+  color: #fff;
+  border-width: 5px;
+  box-shadow: 0 0 0 6px var(--yellow), 10px 10px 0 6px var(--ink);
+}
+.countdown-hero h1 { font-size: clamp(30px, 4.5vw, 54px); margin: 0; color: #fff; text-shadow: 3px 3px 0 var(--ink); }
+.countdown-hero .event-pill { background: var(--pink); }
+.countdown.big { grid-template-columns: repeat(4, minmax(0, 150px)); gap: 14px; justify-content: center; width: 100%; }
+.countdown.big div { padding: 14px 6px 10px; border: 3px solid var(--ink); box-shadow: var(--shadow-sm); }
+.countdown.big b { font-size: clamp(40px, 6.5vw, 84px); line-height: 1; }
+.countdown.big small { font-size: clamp(12px, 1.4vw, 16px); }
+.hero-when { font-size: clamp(18px, 2.2vw, 26px); margin: 0; }
+.hero-note { margin: 0; max-width: 640px; }
+.hero-mine {
+  width: min(560px, 100%);
+  background: var(--paper);
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  padding: 12px 16px;
+  text-align: left;
+}
+.hero-mine h3 { margin-bottom: 6px; }
+.countdown-hero .muted { color: #fff; }
+.countdown-hero .link-btn { color: #fff; }
+
+/* Organizer: "don't match" pairs */
+.pair-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+.pair-chip {
+  font-size: 13px; font-weight: 700;
+  background: #ffd9dc; border: 2px solid var(--ink); border-radius: 999px;
+  padding: 2px 4px 2px 10px; display: inline-flex; align-items: center; gap: 2px;
+}
+.chip-x { border: 0; background: none; cursor: pointer; font-weight: 700; padding: 0 6px; }
+.pair-pick { width: auto; font-size: 13px; padding: 4px 8px; border-width: 2px; }
+.hero-mine { padding: 8px 14px; }
+.hero-mine summary { cursor: pointer; font-weight: 700; }
+.hero-mine[open] summary { margin-bottom: 8px; }

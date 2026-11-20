@@ -6,7 +6,7 @@ import {
 import {
   getFirestore, doc, collection, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
   onSnapshot, query, orderBy, serverTimestamp, Timestamp, runTransaction,
-  writeBatch, deleteField, arrayUnion,
+  writeBatch, deleteField, arrayUnion, arrayRemove,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 import { firebaseConfig, BUDGET, MIN_PLAYERS, MAX_PLAYERS } from "./config.js";
@@ -457,7 +457,7 @@ function render() {
   let cards;
   if (S.isAdmin) cards = adminView();
   else if (!S.user || !S.me || S.justJoined || W.busy) { showWizard(); return; }
-  else if (S.phase === "open") cards = openView();
+  else if (S.phase === "open") { layout(openView()); return; }
   else if (S.phase === "drawing") cards = drawingView();
   else cards = santaView();
 
@@ -528,7 +528,6 @@ function updatePeople() {
   }
   const c = document.getElementById("peopleCount");
   if (c) c.textContent = String(S.participants.length);
-  updateExclusions();
   updateAdminPeople();
 }
 
@@ -685,7 +684,6 @@ function wizDone() {
     countdownEl(drawAt),
     h("p", {}, "Come back to this same link after that, log in with your name + PIN, and you'll see who you're buying for and where to send it. 🎯"),
     budgetPill(),
-    h("p", { class: "muted" }, "Optional: on your page you can mark anyone you shouldn't draw (partner, roommate)."),
     h("button", { class: "btn yellow", type: "button", onclick: () => { S.justJoined = false; currentView = null; render(); } }, "Go to my page →"));
 }
 
@@ -802,15 +800,52 @@ function updateAdminPeople() {
     return;
   }
   const ids = new Set(S.participants.map((p) => p.id));
+  // "Don't match" pairs work both ways, so show a pair on both people's rows.
+  const partnersOf = (p) => new Set([
+    ...(p.exclusions || []).filter((x) => ids.has(x)),
+    ...S.participants.filter((o) => (o.exclusions || []).includes(p.id)).map((o) => o.id),
+  ]);
   box.replaceChildren(...S.participants.map((p) => {
     const peekOut = h("div");
-    const excl = (p.exclusions || []).filter((x) => ids.has(x)).map(nameOf);
+    const partners = partnersOf(p);
     const joined = toDate(p.joinedAt);
+    const typeTag = p.deliveryType === "physical" ? " · 📦 address" : p.deliveryType === "virtual" ? " · 💻 virtual" : "";
+    let pairUi = null;
+    if (!drawn) {
+      const pick = h("select", { class: "pair-pick", "aria-label": `Don't match ${p.name} with…` },
+        h("option", { value: "" }, "🚫 don't match with…"),
+        ...S.participants.filter((o) => o.id !== p.id && !partners.has(o.id)).map((o) => h("option", { value: o.id }, o.name)));
+      pick.addEventListener("change", async () => {
+        const other = pick.value;
+        if (!other) return;
+        pick.disabled = true;
+        try {
+          await updateDoc(doc(db, "events", eventId, "participants", p.id), { exclusions: arrayUnion(other) });
+          toast(`${p.name} and ${nameOf(other)} won't be matched.`);
+        } catch (e) { toast("Couldn't save: " + e.message); pick.disabled = false; pick.value = ""; }
+      });
+      pairUi = h("div", { class: "pair-row" },
+        ...[...partners].map((o) => h("span", { class: "pair-chip" }, `🚫 ${nameOf(o)} `,
+          h("button", {
+            class: "chip-x", type: "button", "aria-label": `Allow ${p.name} and ${nameOf(o)} to be matched`,
+            onclick: async () => {
+              try {
+                const batch = writeBatch(db);
+                batch.update(doc(db, "events", eventId, "participants", p.id), { exclusions: arrayRemove(o) });
+                batch.update(doc(db, "events", eventId, "participants", o), { exclusions: arrayRemove(p.id) });
+                await batch.commit();
+              } catch (e) { toast("Couldn't save: " + e.message); }
+            },
+          }, "✕"))),
+        pick);
+    } else if (partners.size) {
+      pairUi = h("div", { class: "muted" }, `🚫 not matched with ${[...partners].map(nameOf).join(", ")}`);
+    }
     return h("div", { class: "admin-row" },
       h("div", { class: "admin-who" },
         h("b", {}, p.name),
-        h("div", { class: "muted" }, joined ? "joined " + fmtDate(joined) : "just joined",
-          excl.length ? ` · won't draw ${excl.join(", ")}` : ""),
+        h("div", { class: "muted" }, (joined ? "joined " + fmtDate(joined) : "just joined") + typeTag),
+        pairUi,
         peekOut),
       h("div", { class: "row" },
         drawn ? confirmBtn("🔓 Peek", "Spoil it for you?", "ghost", () => peekGiftee(p, peekOut)) : null,
@@ -991,68 +1026,24 @@ async function logout() {
 // Open phase (member, before the draw)
 // ---------------------------------------------------------------------
 function openView() {
-  const out = [shareCard()];
-
-  out.push(h("section", { class: "card", "data-col": "b" },
-    h("h2", {}, "WHO'S IN (", h("span", { id: "peopleCount" }, String(S.participants.length)), ")"),
-    peopleList(),
-    S.participants.length < MIN_PLAYERS
-      ? h("p", { class: "muted", style: "margin-top:12px" }, `Need at least ${MIN_PLAYERS} people before the draw. Recruit harder.`)
-      : null,
-  ));
-
-  out.push(exclusionsCard());
-  out.push(myDeliveryCard());
-
-  out.push(h("section", { class: "card", "data-col": "b" },
-    h("h3", {}, "Changed your mind?"),
-    h("button", {
-      class: "btn ghost small", type: "button",
-      onclick: async () => {
-        if (!confirm("Leave this Secret Santa? You can rejoin later with the same name + PIN while sign-ups are open.")) return;
-        try {
-          await deleteDoc(doc(db, "events", eventId, "private", S.user.uid)).catch(() => {});
-          await deleteDoc(doc(db, "events", eventId, "participants", S.user.uid));
-          await signOut(auth);
-          toast("You left. Coward. 🐔");
-        } catch (e) { toast("Couldn't leave: " + e.message); }
-      },
-    }, "Leave event"),
-  ));
-  queueMicrotask(() => { updatePeople(); updateExclusions(); updateMyDelivery(); });
-  return out;
+  const drawAt = toDate(S.event.drawAt);
+  const when = drawAt.toLocaleString(undefined, { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const cd = countdownEl(drawAt);
+  cd.classList.add("big");
+  queueMicrotask(updateMyDelivery);
+  return [h("section", { class: "card countdown-hero center" },
+    h("div", { class: "event-pill" }, S.event.name),
+    h("h1", {}, "🎲 NAMES DRAWN IN"),
+    cd,
+    h("p", { class: "hero-when" }, h("b", {}, when)),
+    h("p", { class: "hero-note" }, "Come back to this page after that to see who you're buying for and where to send it. 🎯"),
+    budgetPill(),
+    h("details", { class: "hero-mine" }, h("summary", {}, "🎯 Where your gift goes (check or edit)"), h("div", { id: "myDelivery" })),
+    h("p", { class: "muted" }, "Logged in as ", h("b", {}, S.me.name), " · ",
+      h("button", { class: "link-btn", type: "button", onclick: logout }, "log out")),
+  )];
 }
 
-function exclusionsCard() {
-  return h("section", { class: "card yellow tilt-r", "data-col": "b" },
-    h("h2", {}, "🚫 Who should you NOT draw?"),
-    h("p", {}, "Partner? Roommate? Sibling who already knows what you want? Tick them and you won't draw each other (works both ways)."),
-    h("div", { class: "checks", id: "exclusions" }),
-  );
-}
-function updateExclusions() {
-  const box = document.getElementById("exclusions");
-  if (!box || !S.me) return;
-  const others = S.participants.filter((p) => p.id !== S.me.id);
-  if (!others.length) {
-    box.replaceChildren(h("p", { class: "muted" }, "Nobody else has joined yet."));
-    return;
-  }
-  const mine = new Set(S.me.exclusions || []);
-  const theirs = new Set(S.participants.filter((p) => (p.exclusions || []).includes(S.me.id)).map((p) => p.id));
-  box.replaceChildren(...others.map((p) => {
-    const cb = h("input", { type: "checkbox", checked: mine.has(p.id) });
-    cb.addEventListener("change", async () => {
-      const next = new Set(S.me.exclusions || []);
-      cb.checked ? next.add(p.id) : next.delete(p.id);
-      try {
-        await updateDoc(doc(db, "events", eventId, "participants", S.me.id), { exclusions: [...next] });
-        toast(cb.checked ? `You won't draw ${p.name} (and vice versa).` : `${p.name} is back in the pool.`);
-      } catch (e) { toast("Couldn't save: " + e.message); cb.checked = !cb.checked; }
-    });
-    return h("label", { class: "check" }, cb, p.name, theirs.has(p.id) && !mine.has(p.id) ? h("span", { title: "They excluded you" }, " 🔒") : null);
-  }));
-}
 function myDeliveryCard() {
   return h("section", { class: "card", id: "myDeliveryCard" },
     h("h2", {}, "🎯 Where your gift goes"),
