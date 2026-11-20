@@ -910,3 +910,15 @@ body.landing .site-header .banner { visibility: hidden; }
   .intro-split { grid-template-columns: minmax(0, 1fr); }
   .intro-split > * { min-width: 0; }
 }
+
+/* Organizer: manual matches */
+.reassign summary { cursor: pointer; font-weight: 700; }
+.reassign[open] summary { margin-bottom: 10px; }
+.reassign-body { display: grid; gap: 8px; max-height: 40vh; overflow-y: auto; padding-right: 4px; }
+.reassign-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  background: #fff; border: 2px solid var(--ink); border-radius: 10px; padding: 6px 10px;
+}
+.reassign-row b { min-width: 120px; }
+.reassign-pick { width: auto; min-width: 150px; font-size: 14px; padding: 4px 8px; border-width: 2px; }
+.reassign-warn { font-size: 13px; font-weight: 700; color: var(--red); }

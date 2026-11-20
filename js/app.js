@@ -754,7 +754,7 @@ function adminView() {
       ? "Remove & patch drops someone; their Santa takes over their giftee."
       : "Remove kicks a duplicate or fake account (it can't rejoin)."),
     h("div", { class: "admin-list", id: "adminPeople" })));
-  if (drawn) out.push(adminRedrawCard());
+  if (drawn) out.push(adminReassignCard(), adminRedrawCard());
   queueMicrotask(updateAdminPeople);
   return out;
 }
@@ -918,6 +918,77 @@ async function peekGiftee(p, out) {
   out.replaceChildren(h("div", { class: "delivery", style: "margin-top:8px" },
     `${p.name} is buying for ${nameOf(g)}\n`,
     info ? `${info.deliveryType === "physical" ? "📦 " : "💻 "}${info.deliveryInfo}` : "(no delivery info yet)"));
+}
+
+// ---------------------------------------------------------------------
+// Organizer: manually reassign matches after the draw. Picking a new giftee
+// swaps with whoever had them, so everyone still gives and gets exactly one.
+// ---------------------------------------------------------------------
+function adminReassignCard() {
+  const body = h("div", { class: "reassign-body" });
+  const det = h("details", { class: "reassign" },
+    h("summary", {}, "Show everyone's match and reassign (spoilers!)"), body);
+  det.addEventListener("toggle", () => { if (det.open) loadReassign(body); else queueFit(); });
+  return h("section", { class: "card" },
+    h("h2", {}, "🔀 MANUAL MATCHES"),
+    h("p", { class: "muted" }, "Pick a new giftee for someone and they swap with whoever had that person, so everyone still has exactly one."),
+    det);
+}
+
+async function loadReassign(body) {
+  body.replaceChildren(h("p", { class: "muted" }, "Loading matches…"));
+  let snap;
+  try {
+    snap = await getDocs(collection(db, "events", eventId, "assignments"));
+  } catch (e) {
+    body.replaceChildren(h("p", { class: "error" }, "Couldn't load matches: " + e.message));
+    return;
+  }
+  const asg = new Map(snap.docs.map((d) => [d.id, d.data()]));
+  const santaOf = new Map([...asg].map(([s, a]) => [a.gifteeUid, s]));
+  const byId = new Map(S.participants.map((p) => [p.id, p]));
+  const tag = (id) => (byId.get(id)?.deliveryType === "physical" ? "📦 " : byId.get(id)?.deliveryType === "virtual" ? "💻 " : "");
+  const excluded = (a, b) => (byId.get(a)?.exclusions || []).includes(b) || (byId.get(b)?.exclusions || []).includes(a);
+  const inDraw = S.participants.filter((p) => asg.has(p.id));
+  if (!inDraw.length) {
+    body.replaceChildren(h("p", { class: "muted" }, "No matches yet."));
+    return;
+  }
+  body.replaceChildren(...inDraw.map((p) => {
+    const cur = asg.get(p.id).gifteeUid;
+    const warn = [];
+    if (excluded(p.id, cur)) warn.push("🚫 pair");
+    if (asg.get(cur)?.gifteeUid === p.id) warn.push("have each other");
+    const sel = h("select", { class: "reassign-pick", "aria-label": `Who ${p.name} buys for` },
+      ...inDraw.filter((o) => o.id !== p.id).map((o) => h("option", { value: o.id, selected: o.id === cur }, tag(o.id) + o.name)));
+    sel.addEventListener("change", async () => {
+      const A = p.id, X = cur, Y = sel.value;
+      const B = santaOf.get(Y); // whoever was buying for Y now gets A's old giftee
+      if (!B || B === X) {
+        toast(`That swap would make ${nameOf(X)} buy for themselves. Pick someone else.`);
+        sel.value = cur;
+        return;
+      }
+      sel.disabled = true;
+      try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, "events", eventId, "assignments", A), { gifteeUid: Y, santaBox: asg.get(Y)?.myBox || randId() });
+        batch.update(doc(db, "events", eventId, "assignments", B), { gifteeUid: X, santaBox: asg.get(X)?.myBox || randId() });
+        batch.update(doc(db, "events", eventId, "reveal", "pairs"), { [`santaOf.${Y}`]: A, [`santaOf.${X}`]: B });
+        await batch.commit();
+        toast(`Done: ${nameOf(A)} now buys for ${nameOf(Y)}, and ${nameOf(B)} now buys for ${nameOf(X)}.`);
+      } catch (e) {
+        toast("Couldn't reassign: " + e.message);
+      }
+      loadReassign(body);
+    });
+    return h("div", { class: "reassign-row" },
+      h("b", {}, tag(p.id) + p.name),
+      h("span", { class: "muted" }, "buys for →"),
+      sel,
+      warn.length ? h("span", { class: "reassign-warn" }, "⚠️ " + warn.join(", ")) : null);
+  }));
+  queueFit();
 }
 
 function adminRedrawCard() {

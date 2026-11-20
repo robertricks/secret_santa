@@ -23,7 +23,7 @@ A Secret Santa site for the Discord crew. Static files on GitHub Pages + a free 
 Whoever starts an event sets an **organizer password**. Log in with it from the "🛠 Organizer? Log in here" link at the bottom of the event page. (It's a separate login, so the organizer can also JOIN as a normal player.)
 
 - **Before the draw:** see who joined (and 📦/💻), set **🚫 don't match** pairs (partners, roommates; works both ways), **Remove** duplicates/fakes (that account can't rejoin), edit the name and dates, or **🎰 Draw names NOW**.
-- **After the draw:** **Remove & patch** someone who drops out (their Santa takes over their giftee), **🔁 Redraw** everyone, or **🔓 Peek** at one person's giftee if they forgot their PIN, so you can DM it to them.
+- **After the draw:** **🔀 Manual matches** (pick a new giftee for anyone; they swap with whoever had that person, with warnings for 🚫 pairs or people who have each other), **Remove & patch** someone who drops out (their Santa takes over their giftee), **🔁 Redraw** everyone, or **🔓 Peek** at one person's giftee if they forgot their PIN, so you can DM it to them.
 - The organizer never sees the matches unless they click Peek.
 
 ## Privacy (honest version)
