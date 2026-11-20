@@ -4,12 +4,15 @@ rules_version = '2';
 // Privacy model: each person can read only their own assignment; a Santa can read
 // only their giftee's delivery info; chat boxes are readable only by the two people
 // in them; the full who-had-whom list unlocks at the reveal time (server clock).
+// The event's organizer (adminUid) can fix problems: remove people, change dates,
+// patch or redraw the matches. The organizer can never read chats.
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
     function evPath(e) { return /databases/$(database)/documents/events/$(e); }
     function ev(e) { return get(evPath(e)).data; }
+    function isAdmin(e) { return signedIn() && ev(e).get('adminUid', '') == request.auth.uid; }
     function isMember(e) {
       return signedIn() && exists(/databases/$(database)/documents/events/$(e)/participants/$(request.auth.uid));
     }
@@ -17,14 +20,16 @@ service cloud.firestore {
     function hasAsg(e) { return signedIn() && exists(asgPath(e)); }
     function asg(e) { return get(asgPath(e)).data; }
     function drawingNow(e) {
-      return isMember(e) && ev(e).status == 'open' && request.time >= ev(e).drawAt
+      return (isMember(e) || isAdmin(e)) && ev(e).status == 'open' && request.time >= ev(e).drawAt
         && getAfter(evPath(e)).data.status == 'drawn';
     }
 
     match /events/{e} {
       allow read: if true;
 
-      allow create: if request.resource.data.keys().hasOnly(['name', 'drawAt', 'revealAt', 'budget', 'status', 'createdAt'])
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['name', 'drawAt', 'revealAt', 'budget', 'status', 'createdAt', 'adminUid'])
+        && request.resource.data.adminUid == request.auth.uid
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
         && request.resource.data.drawAt is timestamp
@@ -35,8 +40,8 @@ service cloud.firestore {
         && request.resource.data.status == 'open'
         && request.resource.data.createdAt == request.time;
 
-      // The draw: open -> drawn, once, after the draw time, by a participant.
-      allow update: if isMember(e)
+      // The draw: open -> drawn, once, after the draw time, by a participant or the organizer.
+      allow update: if (isMember(e) || isAdmin(e))
         && resource.data.status == 'open'
         && request.time >= resource.data.drawAt
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'drawnAt', 'count'])
@@ -44,12 +49,26 @@ service cloud.firestore {
         && request.resource.data.drawnAt == request.time
         && existsAfter(/databases/$(database)/documents/events/$(e)/reveal/pairs);
 
+      // Organizer edits: name, dates, banned accounts.
+      allow update: if isAdmin(e)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'drawAt', 'revealAt', 'banned'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+        && request.resource.data.revealAt is timestamp
+        && request.resource.data.revealAt > request.resource.data.drawAt
+        && request.resource.data.get('banned', []) is list
+        && request.resource.data.get('banned', []).size() <= 200
+        && (request.resource.data.drawAt == resource.data.drawAt
+          || (resource.data.status == 'open' && request.resource.data.drawAt is timestamp
+              && request.resource.data.drawAt >= request.time));
+
       allow delete: if false;
 
       match /participants/{uid} {
         allow read: if true;
         allow create: if signedIn() && request.auth.uid == uid
           && ev(e).status == 'open' && request.time < ev(e).drawAt
+          && !(uid in ev(e).get('banned', []))
           && request.resource.data.keys().hasOnly(['name', 'nameKey', 'exclusions', 'joinedAt'])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 30
@@ -60,37 +79,43 @@ service cloud.firestore {
           && ev(e).status == 'open' && request.time < ev(e).drawAt
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['exclusions'])
           && request.resource.data.exclusions is list && request.resource.data.exclusions.size() <= 100;
-        allow delete: if signedIn() && request.auth.uid == uid
-          && ev(e).status == 'open' && request.time < ev(e).drawAt;
+        allow delete: if isAdmin(e)
+          || (signedIn() && request.auth.uid == uid && ev(e).status == 'open' && request.time < ev(e).drawAt);
       }
 
       // Delivery info (address or virtual handle).
       match /private/{uid} {
-        allow read: if signedIn() && (request.auth.uid == uid || (hasAsg(e) && asg(e).gifteeUid == uid));
+        allow read: if signedIn() && (request.auth.uid == uid || isAdmin(e) || (hasAsg(e) && asg(e).gifteeUid == uid));
         allow create, update: if signedIn() && request.auth.uid == uid
           && request.resource.data.keys().hasOnly(['deliveryType', 'deliveryInfo', 'updatedAt'])
           && request.resource.data.deliveryType in ['physical', 'virtual']
           && request.resource.data.deliveryInfo is string
           && request.resource.data.deliveryInfo.size() > 0 && request.resource.data.deliveryInfo.size() <= 500
           && request.resource.data.updatedAt == request.time;
-        allow delete: if signedIn() && request.auth.uid == uid && ev(e).status == 'open';
+        allow delete: if isAdmin(e) || (signedIn() && request.auth.uid == uid && ev(e).status == 'open');
       }
 
       match /assignments/{uid} {
-        allow read: if signedIn() && request.auth.uid == uid;
-        allow create: if drawingNow(e)
+        allow read: if signedIn() && (request.auth.uid == uid || isAdmin(e));
+        allow create: if (drawingNow(e) || isAdmin(e))
           && request.resource.data.keys().hasOnly(['gifteeUid', 'santaBox', 'myBox'])
           && request.resource.data.gifteeUid is string && request.resource.data.gifteeUid != uid
           && request.resource.data.santaBox is string && request.resource.data.myBox is string;
-        allow update, delete: if false;
+        allow update: if isAdmin(e)
+          && request.resource.data.keys().hasOnly(['gifteeUid', 'santaBox', 'myBox'])
+          && request.resource.data.gifteeUid != uid;
+        allow delete: if isAdmin(e);
       }
 
       match /reveal/{docId} {
-        allow read: if docId == 'pairs' && request.time >= ev(e).revealAt;
-        allow create: if docId == 'pairs' && drawingNow(e)
+        allow read: if docId == 'pairs' && (request.time >= ev(e).revealAt || isAdmin(e));
+        allow create: if docId == 'pairs' && (drawingNow(e) || isAdmin(e))
           && request.resource.data.keys().hasOnly(['santaOf'])
           && request.resource.data.santaOf is map;
-        allow update, delete: if false;
+        allow update: if docId == 'pairs' && isAdmin(e)
+          && request.resource.data.keys().hasOnly(['santaOf'])
+          && request.resource.data.santaOf is map;
+        allow delete: if false;
       }
 
       // Anonymous Santa chat: one box per giftee, shared with their Santa only.
@@ -115,7 +140,7 @@ service cloud.firestore {
           && request.resource.data.santaUid == get(/databases/$(database)/documents/events/$(e)/reveal/pairs).data.santaOf[gid]
           && request.resource.data.evidence is string && request.resource.data.evidence.size() <= 300
           && request.resource.data.at == request.time;
-        allow delete: if signedIn() && request.auth.uid == gid;
+        allow delete: if isAdmin(e) || (signedIn() && request.auth.uid == gid);
         allow update: if false;
       }
     }

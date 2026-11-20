@@ -131,7 +131,7 @@ export function gobble() {
 
 // ---------- confetti ----------
 const COLORS = ["#ff2e93", "#b6ff00", "#2d6bff", "#ffe500", "#ff7a00", "#00c46a", "#ffffff"];
-const EMOJI = ["🎁", "🎅", "🦃", "✨", "🎄"];
+const EMOJI = ["🎁", "❄️", "🦃", "✨", "🎄"];
 let particles = [];
 let raf = null;
 

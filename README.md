@@ -14,6 +14,14 @@ A Secret Santa site for the Discord crew. Static files on GitHub Pages + a free 
 5. On reveal day: **▶ START THE SHOW**, a one-by-one reveal with drumroll, air horn and confetti, built for screen-sharing in a Discord call.
 6. **Turkey Court**: giftees can charge their Santa with overspending → public roast on the Wall of Shame.
 
+## Organizer mode 🛠
+
+Whoever starts an event sets an **organizer password**. Log in with it from the "🛠 Organizer? Log in here" link at the bottom of the event page. (It's a separate login, so the organizer can also JOIN as a normal player.)
+
+- **Before the draw:** see who joined, **Remove** duplicates/fakes (that account can't rejoin), edit the name and dates, or **🎰 Draw names NOW**.
+- **After the draw:** **Remove & patch** someone who drops out (their Santa takes over their giftee), **🔁 Redraw** everyone, or **🔓 Peek** at one person's giftee if they forgot their PIN, so you can DM it to them.
+- The organizer can't read anyone's chats, and never sees the matches unless they click Peek.
+
 ## Privacy (honest version)
 
 - Firestore security rules make sure you can only read **your own** assignment, a Santa can only read **their giftee's** address, chat boxes are only readable by the two people in them, and the full who-had-whom list only unlocks at the reveal time (server clock).
