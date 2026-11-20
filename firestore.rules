@@ -1,0 +1,123 @@
+rules_version = '2';
+
+// Secret Santa security rules.
+// Privacy model: each person can read only their own assignment; a Santa can read
+// only their giftee's delivery info; chat boxes are readable only by the two people
+// in them; the full who-had-whom list unlocks at the reveal time (server clock).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function evPath(e) { return /databases/$(database)/documents/events/$(e); }
+    function ev(e) { return get(evPath(e)).data; }
+    function isMember(e) {
+      return signedIn() && exists(/databases/$(database)/documents/events/$(e)/participants/$(request.auth.uid));
+    }
+    function asgPath(e) { return /databases/$(database)/documents/events/$(e)/assignments/$(request.auth.uid); }
+    function hasAsg(e) { return signedIn() && exists(asgPath(e)); }
+    function asg(e) { return get(asgPath(e)).data; }
+    function drawingNow(e) {
+      return isMember(e) && ev(e).status == 'open' && request.time >= ev(e).drawAt
+        && getAfter(evPath(e)).data.status == 'drawn';
+    }
+
+    match /events/{e} {
+      allow read: if true;
+
+      allow create: if request.resource.data.keys().hasOnly(['name', 'drawAt', 'revealAt', 'budget', 'status', 'createdAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+        && request.resource.data.drawAt is timestamp
+        && request.resource.data.revealAt is timestamp
+        && request.resource.data.drawAt > request.time
+        && request.resource.data.revealAt > request.resource.data.drawAt
+        && request.resource.data.budget == 20
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt == request.time;
+
+      // The draw: open -> drawn, once, after the draw time, by a participant.
+      allow update: if isMember(e)
+        && resource.data.status == 'open'
+        && request.time >= resource.data.drawAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'drawnAt', 'count'])
+        && request.resource.data.status == 'drawn'
+        && request.resource.data.drawnAt == request.time
+        && existsAfter(/databases/$(database)/documents/events/$(e)/reveal/pairs);
+
+      allow delete: if false;
+
+      match /participants/{uid} {
+        allow read: if true;
+        allow create: if signedIn() && request.auth.uid == uid
+          && ev(e).status == 'open' && request.time < ev(e).drawAt
+          && request.resource.data.keys().hasOnly(['name', 'nameKey', 'exclusions', 'joinedAt'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 30
+          && request.resource.data.nameKey is string && request.resource.data.nameKey.size() <= 30
+          && request.resource.data.exclusions is list && request.resource.data.exclusions.size() == 0
+          && request.resource.data.joinedAt == request.time;
+        allow update: if signedIn() && request.auth.uid == uid
+          && ev(e).status == 'open' && request.time < ev(e).drawAt
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['exclusions'])
+          && request.resource.data.exclusions is list && request.resource.data.exclusions.size() <= 100;
+        allow delete: if signedIn() && request.auth.uid == uid
+          && ev(e).status == 'open' && request.time < ev(e).drawAt;
+      }
+
+      // Delivery info (address or virtual handle).
+      match /private/{uid} {
+        allow read: if signedIn() && (request.auth.uid == uid || (hasAsg(e) && asg(e).gifteeUid == uid));
+        allow create, update: if signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['deliveryType', 'deliveryInfo', 'updatedAt'])
+          && request.resource.data.deliveryType in ['physical', 'virtual']
+          && request.resource.data.deliveryInfo is string
+          && request.resource.data.deliveryInfo.size() > 0 && request.resource.data.deliveryInfo.size() <= 500
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if signedIn() && request.auth.uid == uid && ev(e).status == 'open';
+      }
+
+      match /assignments/{uid} {
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow create: if drawingNow(e)
+          && request.resource.data.keys().hasOnly(['gifteeUid', 'santaBox', 'myBox'])
+          && request.resource.data.gifteeUid is string && request.resource.data.gifteeUid != uid
+          && request.resource.data.santaBox is string && request.resource.data.myBox is string;
+        allow update, delete: if false;
+      }
+
+      match /reveal/{docId} {
+        allow read: if docId == 'pairs' && request.time >= ev(e).revealAt;
+        allow create: if docId == 'pairs' && drawingNow(e)
+          && request.resource.data.keys().hasOnly(['santaOf'])
+          && request.resource.data.santaOf is map;
+        allow update, delete: if false;
+      }
+
+      // Anonymous Santa chat: one box per giftee, shared with their Santa only.
+      match /boxes/{box}/messages/{msg} {
+        allow read: if hasAsg(e) && (asg(e).santaBox == box || asg(e).myBox == box);
+        allow create: if hasAsg(e)
+          && request.resource.data.keys().hasOnly(['from', 'text', 'at'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
+          && request.resource.data.at == request.time
+          && ((request.resource.data.from == 'santa' && asg(e).santaBox == box)
+            || (request.resource.data.from == 'giftee' && asg(e).myBox == box));
+        allow update, delete: if false;
+      }
+
+      // Turkey Court: after the reveal, a giftee can charge their own Santa.
+      match /flags/{gid} {
+        allow read: if request.time >= ev(e).revealAt;
+        allow create: if signedIn() && request.auth.uid == gid
+          && request.time >= ev(e).revealAt
+          && request.resource.data.keys().hasOnly(['santaUid', 'evidence', 'at'])
+          && request.resource.data.santaUid == get(/databases/$(database)/documents/events/$(e)/reveal/pairs).data.santaOf[gid]
+          && request.resource.data.evidence is string && request.resource.data.evidence.size() <= 300
+          && request.resource.data.at == request.time;
+        allow delete: if signedIn() && request.auth.uid == gid;
+        allow update: if false;
+      }
+    }
+  }
+}

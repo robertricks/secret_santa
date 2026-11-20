@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SECRET SANTA 🎅🦃</title>
+<meta name="description" content="A chaotic Secret Santa for the group chat. $20 max or get roasted like a turkey.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎅</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="marquee" aria-hidden="true">
+  <div class="marquee-track">
+    <span>🚨 $20 MAX OR GET ROASTED LIKE A TURKEY 🚨</span>
+    <span>🎅 SANTA IS WATCHING (HE IS NOT, HE IS ENCRYPTED-ISH) 🎅</span>
+    <span>🦃 TURKEY COURT IS IN SESSION 🦃</span>
+    <span>🎁 NO GIFT CARDS TO THE SAME STORE YOU WORK AT 🎁</span>
+    <span>🚨 $20 MAX OR GET ROASTED LIKE A TURKEY 🚨</span>
+    <span>🎅 SANTA IS WATCHING (HE IS NOT, HE IS ENCRYPTED-ISH) 🎅</span>
+    <span>🦃 TURKEY COURT IS IN SESSION 🦃</span>
+    <span>🎁 NO GIFT CARDS TO THE SAME STORE YOU WORK AT 🎁</span>
+  </div>
+</div>
+
+<header class="site-header">
+  <a href="./" class="logo">SECRET<br><span>SANTA</span></a>
+  <div class="sticker sticker-budget">$20 MAX<br><small>or 🦃🔥</small></div>
+  <button id="soundToggle" class="icon-btn" type="button" title="Toggle sounds">🔊</button>
+</header>
+
+<main id="app" aria-live="polite">
+  <div class="card loading">Summoning elves…</div>
+</main>
+
+<footer class="site-footer">
+  made with questionable judgment · no elves were paid
+</footer>
+
+<canvas id="confetti" aria-hidden="true"></canvas>
+<div id="toast" role="status"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
