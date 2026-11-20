@@ -215,16 +215,17 @@ function renderLanding() {
   const form = h("form", { class: "stack" },
     h("label", {}, "Event name",
       h("input", { name: "name", required: true, maxlength: 60, placeholder: "The Group Chat Gift Heist 2026" })),
-    h("label", {}, "🎲 Sign-ups close & names get drawn",
-      h("input", { name: "drawAt", type: "datetime-local", required: true, value: local(draw) })),
-    h("label", {}, "🥁 Big reveal (who had whom)",
-      h("input", { name: "revealAt", type: "datetime-local", required: true, value: local(reveal) })),
-    h("p", { class: "muted" }, `Budget is locked at $${BUDGET}. Go over and Turkey Court will deal with you.`),
-    h("label", {}, "🛠 Organizer password (8+ characters)",
-      h("input", { name: "adminPw", type: "password", minlength: 8, maxlength: 64, required: true, autocomplete: "new-password" })),
-    h("label", {}, "Organizer password again",
-      h("input", { name: "adminPw2", type: "password", minlength: 8, maxlength: 64, required: true, autocomplete: "new-password" })),
-    h("p", { class: "muted" }, "Lets you fix problems later: remove duplicate accounts, change dates, redraw. You still can't see who has whom unless you deliberately peek. Save it somewhere: there's no reset."),
+    h("div", { class: "pair" },
+      h("label", {}, "🎲 Names drawn",
+        h("input", { name: "drawAt", type: "datetime-local", required: true, value: local(draw) })),
+      h("label", {}, "🥁 Big reveal",
+        h("input", { name: "revealAt", type: "datetime-local", required: true, value: local(reveal) }))),
+    h("div", { class: "pair" },
+      h("label", {}, "🛠 Organizer password",
+        h("input", { name: "adminPw", type: "password", minlength: 8, maxlength: 64, required: true, autocomplete: "new-password", placeholder: "8+ characters" })),
+      h("label", {}, "Password again",
+        h("input", { name: "adminPw2", type: "password", minlength: 8, maxlength: 64, required: true, autocomplete: "new-password" }))),
+    h("p", { class: "muted" }, `Budget is locked at $${BUDGET}. The organizer password lets you fix problems later (duplicates, dates, redraws). Save it: there's no reset.`),
     err,
     h("button", { class: "btn pink huge", type: "submit" }, "🎄 START THE CHAOS"),
   );
@@ -266,15 +267,15 @@ function renderLanding() {
     }
   });
 
-  app.append(
+  layout([
     h("section", { class: "card tilt-l" },
       h("span", { class: "big-emoji" }, "🎁🎄🦃"),
       h("h1", {}, "SECRET SANTA FOR THE GROUP CHAT"),
       h("p", {}, "Everyone signs up with a name and a PIN. On draw day the site secretly matches everyone up. You see who you're buying for and where to send it. On reveal day we find out who had whom, in the most dramatic way possible."),
       h("p", {}, h("b", {}, `$${BUDGET} max.`), " Go over and you get dragged to Turkey Court."),
     ),
-    h("section", { class: "card yellow tilt-r" }, h("h2", {}, "Start a new Secret Santa"), form),
-  );
+    h("section", { class: "card yellow tilt-r", "data-col": "b" }, h("h2", {}, "Start a new Secret Santa"), form),
+  ]);
 }
 
 // ======================================================================
@@ -396,22 +397,38 @@ function render() {
   if (key === currentView) return;
   currentView = key;
 
-  app.replaceChildren(headerCard());
-  if (S.isAdmin) {
-    app.append(...adminView());
-    return;
+  let cards;
+  if (S.isAdmin) cards = adminView();
+  else if (!S.user || !S.me) cards = guestView();
+  else if (S.phase === "open") cards = openView();
+  else if (S.phase === "drawing") cards = drawingView();
+  else cards = santaView();
+
+  // The event info is a thin strip across the top; before the reveal the giftee
+  // card leads instead, with the event info beside it.
+  const header = headerCard();
+  if (cards.some((c) => c.classList?.contains("giftee-hero")) && S.phase === "drawn") {
+    header.dataset.col = "b";
+    header.dataset.first = "1";
+    layout(cards.concat(header));
+  } else {
+    layout(cards, header);
   }
-  if (!S.user || !S.me) {
-    app.append(...guestView());
-    return;
-  }
-  if (S.phase === "open") app.append(...openView());
-  else if (S.phase === "drawing") app.append(...drawingView());
-  else {
-    app.append(...santaView());
-    const hero = app.querySelector(".giftee-hero");
-    if (hero && S.phase === "drawn") app.prepend(hero);
-  }
+}
+
+// Lay cards out in two columns (left = default, right = data-col="b") so a screen fits without scrolling.
+function layout(cards, strip = null) {
+  const left = cards.filter((c) => c.dataset?.col !== "b");
+  const right = cards.filter((c) => c.dataset?.col === "b");
+  // Keep a card marked data-first at the very top of its column.
+  for (const col of [left, right]) col.sort((x, y) => (y.dataset?.first ? 1 : 0) - (x.dataset?.first ? 1 : 0));
+  app.classList.toggle("split", right.length > 0);
+  if (strip) strip.classList.add("full");
+  app.replaceChildren(...[
+    strip,
+    h("div", { class: "col" }, ...left),
+    right.length ? h("div", { class: "col" }, ...right) : null,
+  ].filter(Boolean));
 }
 
 function headerCard() {
@@ -424,14 +441,16 @@ function headerCard() {
     drawn: ["🥁 BIG REVEAL IN", revealAt],
     revealed: ["🎉 REVEALED. TURKEY COURT IS OPEN.", null],
   }[S.phase];
-  return h("section", { class: "card blue tilt-l" },
-    h("h1", {}, ev.name),
-    h("p", {}, `Draw: ${fmtDate(drawAt)} · Reveal: ${fmtDate(revealAt)} · `, h("span", { class: "badge" }, `$${ev.budget || BUDGET} MAX`)),
-    h("h3", {}, phaseLabel[0]),
-    phaseLabel[1] ? countdownEl(phaseLabel[1]) : null,
-    S.user && (S.me || S.isAdmin) ? h("p", { class: "muted", style: "margin-top:12px" },
-      "Logged in as ", h("b", {}, S.isAdmin ? "🛠 the organizer" : S.me.name), " · ",
-      h("button", { class: "link-btn", onclick: logout }, "log out")) : null,
+  return h("section", { class: "card blue event-strip" },
+    h("div", { class: "strip-main" },
+      h("h1", {}, ev.name),
+      h("p", {}, `Draw: ${fmtDate(drawAt)} · Reveal: ${fmtDate(revealAt)} `, h("span", { class: "badge" }, `$${ev.budget || BUDGET} MAX`)),
+      S.user && (S.me || S.isAdmin) ? h("p", { class: "muted" },
+        "Logged in as ", h("b", {}, S.isAdmin ? "🛠 the organizer" : S.me.name), " · ",
+        h("button", { class: "link-btn", onclick: logout }, "log out")) : null),
+    h("div", { class: "phase-row" },
+      h("h3", {}, phaseLabel[0]),
+      phaseLabel[1] ? countdownEl(phaseLabel[1]) : null),
   );
 }
 
@@ -475,9 +494,9 @@ function guestView() {
   const open = S.phase === "open";
   const out = [];
   const created = (() => { try { return localStorage.getItem("ss:created:" + eventId) === "1"; } catch { return false; } })();
-  if (created && open) out.push(shareCard());
+  if (created && open) { const sc = shareCard(); sc.dataset.col = "b"; out.push(sc); }
 
-  const people = h("section", { class: "card" },
+  const people = h("section", { class: "card", "data-col": "b" },
     h("h2", {}, "WHO'S IN (", h("span", { id: "peopleCount" }, String(S.participants.length)), ")"),
     peopleList());
 
@@ -485,10 +504,10 @@ function guestView() {
   const body = h("div");
   const tabs = h("div", { class: "tabs" });
   const drawTabs = () => {
-    tabs.replaceChildren(
+    tabs.replaceChildren(...[
       open ? h("button", { class: "tab" + (mode === "join" ? " active" : ""), type: "button", onclick: () => { mode = "join"; drawTabs(); } }, "JOIN") : null,
       h("button", { class: "tab" + (mode === "login" ? " active" : ""), type: "button", onclick: () => { mode = "login"; drawTabs(); } }, "LOG IN"),
-    );
+    ].filter(Boolean));
     body.replaceChildren(mode === "join" ? joinForm() : loginForm());
   };
   drawTabs();
@@ -517,7 +536,7 @@ function adminLoginCard() {
       err.textContent = ex?.code?.includes("invalid-credential") ? "Wrong organizer password." : friendlyAuthError(ex);
     }
   });
-  return h("section", { class: "card" },
+  return h("section", { class: "card", "data-col": "b" },
     h("button", { class: "link-btn", type: "button", onclick: () => { form.hidden = !form.hidden; if (!form.hidden) pw.focus(); } }, "🛠 Organizer? Log in here"),
     form);
 }
@@ -528,27 +547,23 @@ function adminLoginCard() {
 function adminView() {
   const out = [];
   const drawn = S.event.status === "drawn";
-  out.push(h("section", { class: "card yellow tilt-r" },
+  out.push(h("section", { class: "card yellow tilt-r", "data-col": "b", "data-first": "1" },
     h("h2", {}, "🛠 ORGANIZER MODE"),
-    h("p", {}, "Fix problems here: duplicate accounts, people dropping out, date changes. You can't see who has whom unless you click 🔓 Peek on someone."),
-    h("p", { class: "muted" }, "Want to play too? Log out, then JOIN with your own name + PIN like everyone else. Come back here any time with the 🛠 link at the bottom of the page."),
+    h("p", { class: "muted" }, "You can't see who has whom unless you click 🔓 Peek. Playing too? Log out and JOIN with your own name + PIN."),
+    h("p", { class: "muted" }, "🆘 Forgot a PIN? ", drawn
+      ? "Click 🔓 Peek next to their name and DM them their giftee + address."
+      : "Remove their old account, then have them JOIN again with a slightly different name (like \"Bob 2\")."),
   ));
   if (S.phase === "open") out.push(shareCard());
   if (S.phase === "drawing") out.push(...drawingView());
   out.push(adminSettingsCard());
-  out.push(h("section", { class: "card" },
+  out.push(h("section", { class: "card", "data-col": "b" },
     h("h2", {}, "👥 PLAYERS (", h("span", { id: "peopleCount" }, String(S.participants.length)), ")"),
     h("p", { class: "muted" }, drawn
-      ? "Remove & patch: drops someone after the draw. Their Santa takes over their giftee, so nobody ends up giftless."
-      : "Remove: kicks a duplicate or fake account. That account can't rejoin (the person can rejoin under a new name)."),
+      ? "Remove & patch drops someone; their Santa takes over their giftee."
+      : "Remove kicks a duplicate or fake account (it can't rejoin)."),
     h("div", { class: "admin-list", id: "adminPeople" })));
   if (drawn) out.push(adminRedrawCard());
-  out.push(h("section", { class: "card" },
-    h("h3", {}, "🆘 Someone forgot their PIN?"),
-    h("p", {}, "PINs can't be reset. ", drawn
-      ? "Click 🔓 Peek next to their name and DM them their giftee + address. They'll still get their own gift."
-      : "Remove their old account, then have them JOIN again with a slightly different name (like \"Bob 2\")."),
-  ));
   queueMicrotask(updateAdminPeople);
   return out;
 }
@@ -565,8 +580,9 @@ function adminSettingsCard() {
   revealAt.value = toLocalInput(toDate(ev.revealAt));
   const form = h("form", { class: "stack" },
     h("label", {}, "Event name", name),
-    h("label", {}, open ? "🎲 Draw date" : "🎲 Draw date (already happened)", drawAt),
-    h("label", {}, "🥁 Reveal date", revealAt),
+    h("div", { class: "pair" },
+      h("label", {}, open ? "🎲 Draw date" : "🎲 Drawn", drawAt),
+      h("label", {}, "🥁 Reveal date", revealAt)),
     err,
     h("div", { class: "row" },
       h("button", { class: "btn pink", type: "submit" }, "Save changes"),
@@ -731,7 +747,7 @@ function deliveryFields(current = {}) {
       h("input", { type: "radio", name: "deliveryType", value: "virtual", checked: type === "virtual", onchange: () => setType("virtual") }),
       h("span", { class: "e" }, "💻"), "Virtual gift please"),
   );
-  return [radios, h("label", {}, label, info), hint];
+  return [radios, h("label", {}, label, info)];
 }
 
 function pinField(name, labelText) {
@@ -744,9 +760,7 @@ function joinForm() {
   const form = h("form", { class: "stack" },
     h("label", {}, "Your name (what your friends know you as)",
       h("input", { name: "name", required: true, maxlength: 30, autocomplete: "nickname", placeholder: "xX_GiftLord_Xx" })),
-    pinField("pin", "Pick a 6-digit PIN"),
-    pinField("pin2", "PIN again"),
-    h("p", { class: "muted" }, "Remember it. You need your name + PIN to log back in. There's no reset."),
+    h("div", { class: "pair" }, pinField("pin", "6-digit PIN (remember it!)"), pinField("pin2", "PIN again")),
     ...deliveryFields(),
     err,
     h("button", { class: "btn yellow huge", type: "submit" }, "🎁 I'M IN"),
@@ -836,7 +850,7 @@ async function logout() {
 function openView() {
   const out = [shareCard()];
 
-  out.push(h("section", { class: "card" },
+  out.push(h("section", { class: "card", "data-col": "b" },
     h("h2", {}, "WHO'S IN (", h("span", { id: "peopleCount" }, String(S.participants.length)), ")"),
     peopleList(),
     S.participants.length < MIN_PLAYERS
@@ -847,7 +861,7 @@ function openView() {
   out.push(exclusionsCard());
   out.push(myDeliveryCard());
 
-  out.push(h("section", { class: "card" },
+  out.push(h("section", { class: "card", "data-col": "b" },
     h("h3", {}, "Changed your mind?"),
     h("button", {
       class: "btn ghost small", type: "button",
@@ -867,7 +881,7 @@ function openView() {
 }
 
 function exclusionsCard() {
-  return h("section", { class: "card yellow tilt-r" },
+  return h("section", { class: "card yellow tilt-r", "data-col": "b" },
     h("h2", {}, "🚫 Who should you NOT draw?"),
     h("p", {}, "Partner? Roommate? Sibling who already knows what you want? Tick them and you won't draw each other (works both ways)."),
     h("div", { class: "checks", id: "exclusions" }),
@@ -905,11 +919,11 @@ function updateMyDelivery() {
   const box = document.getElementById("myDelivery");
   if (!box) return;
   const p = S.myPrivate;
-  const view = () => box.replaceChildren(
+  const view = () => box.replaceChildren(...[
     p ? h("p", {}, p.deliveryType === "physical" ? "📦 Shipping to:" : "💻 Virtual gift via:") : h("p", { class: "error" }, "You haven't said where to send your gift yet!"),
     p ? h("div", { class: "delivery" }, p.deliveryInfo) : null,
     S.phase === "open" ? h("button", { class: "btn small yellow", type: "button", style: "margin-top:12px", onclick: edit }, p ? "Edit" : "Add it") : null,
-  );
+  ].filter(Boolean));
   const edit = () => {
     const err = h("p", { class: "error" });
     const form = h("form", { class: "stack" }, ...deliveryFields(p || {}), err,
@@ -1014,14 +1028,22 @@ function santaView() {
       h("p", {}, "Looks like you weren't signed up when names were drawn."))];
   }
 
-  if (S.phase === "revealed") out.push(...revealedCards());
+  if (S.phase === "revealed") {
+    // After the reveal the show and Turkey Court lead; the giftee shrinks to a small card.
+    out.push(...revealedCards());
+    out.push(h("section", { class: "card pink giftee-mini" },
+      h("h3", {}, "🎯 You were the Secret Santa for ", h("span", { class: "mini-name" }, nameOf(a.gifteeUid))),
+      h("details", {}, h("summary", {}, "Their address / handle"), h("div", { id: "gifteeDelivery" }))));
+    queueMicrotask(updateGifteeDelivery);
+    return out;
+  }
 
   // Giftee card: the main thing on the page
   const budget = S.event.budget || BUDGET;
   const budgetBanner = () => h("div", { class: "budget-banner" },
     h("span", { class: "budget-amount" }, `$${budget}`),
     h("span", {}, h("b", {}, "MAX. Do NOT go over."), ` Spend more than $${budget} and you're getting roasted like a turkey in Turkey Court 🦃🔥`));
-  const gifteeCard = h("section", { class: "card pink center giftee-hero" });
+  const gifteeCard = h("section", { class: "card pink center giftee-hero", "data-first": S.phase === "drawn" ? "1" : null });
   const showGiftee = (fresh) => {
     gifteeCard.replaceChildren(
       h("h2", {}, "🎯 YOU'RE BUYING FOR"),
@@ -1045,7 +1067,7 @@ function santaView() {
   out.push(gifteeCard);
 
   if (S.phase === "drawn") {
-    out.push(h("section", { class: "card" },
+    out.push(h("section", { class: "card", "data-col": "b" },
       h("h3", {}, "Your own gift goes to:"),
       h("div", { id: "myDelivery" })));
     queueMicrotask(updateMyDelivery);
@@ -1077,7 +1099,7 @@ function revealedCards() {
     h("p", {}, "Get everyone in a Discord call and share your screen."),
     h("button", { class: "btn yellow huge", type: "button", onclick: startRevealShow }, "▶ START THE SHOW"),
   );
-  const court = h("section", { class: "card yellow tilt-l" },
+  const court = h("section", { class: "card yellow tilt-l", "data-col": "b" },
     h("h2", {}, "🦃⚖️ TURKEY COURT"),
     h("p", {}, `Did your Santa blow past the $${S.event.budget || BUDGET} limit? File charges. The court will roast them publicly.`),
     h("div", { id: "fileCharges" }),
