@@ -149,25 +149,61 @@ body > * { position: relative; z-index: 1; }
   color: var(--red);
   line-height: 1;
 }
-.sticker {
-  font-family: var(--display);
-  background: var(--yellow);
-  color: var(--ink);
+/* Budget warning: a hanging gift tag */
+.gift-tag {
+  position: relative;
+  flex: 0 1 260px;
+  min-width: 0;
+  margin: 14px 0 0 26px;
+  padding: 12px 14px 12px 34px;
+  background: var(--paper);
   border: 3px solid var(--ink);
+  border-radius: 8px 16px 16px 8px;
   box-shadow: var(--shadow-sm);
-  border-radius: 50%;
-  width: 96px; height: 96px;
-  display: grid; place-items: center;
-  text-align: center;
-  line-height: 1;
-  font-size: 14px;
-  width: 112px; height: 112px;
-  transform: rotate(12deg);
-  animation: wobble 2.4s ease-in-out infinite;
-  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.25;
+  transform-origin: -26px 50%;
+  animation: tag-swing 3.2s ease-in-out infinite;
 }
-.sticker small { font-size: 16px; }
-@keyframes wobble { 0%,100% { transform: rotate(12deg) scale(1); } 50% { transform: rotate(-6deg) scale(1.08); } }
+.gift-tag::before {
+  /* candy-cane edge on the tag's left side */
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 22px;
+  border-radius: 5px 0 0 5px;
+  border-right: 3px solid var(--ink);
+  background: repeating-linear-gradient(-45deg, var(--pink) 0 6px, #fff 6px 12px);
+}
+.gift-tag .tag-string {
+  /* red ribbon looping off the tag */
+  position: absolute;
+  left: -28px; top: 50%;
+  width: 40px; height: 22px;
+  border: 3px solid var(--pink);
+  border-right: 0;
+  border-radius: 20px 0 0 20px;
+  transform: translateY(-50%);
+}
+.gift-tag .tag-bow {
+  position: absolute;
+  top: -18px; right: -12px;
+  font-size: 30px;
+  line-height: 1;
+  transform: rotate(14deg);
+}
+.gift-tag strong {
+  display: block;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 24px;
+  color: var(--pink);
+  text-shadow: 2px 2px 0 var(--ink);
+  margin-bottom: 4px;
+}
+.gift-tag strong span { color: var(--green); }
+@keyframes tag-swing { 0%, 100% { transform: rotate(4deg); } 50% { transform: rotate(-3deg); } }
 .icon-btn {
   margin-left: auto;
   font-size: 24px;
@@ -475,8 +511,8 @@ textarea { min-height: 90px; resize: vertical; }
 @media (max-width: 560px) {
   body { font-size: 17px; }
   .card { padding: 16px; }
-  .sticker { width: 84px; height: 84px; font-size: 11px; }
-  .sticker small { font-size: 12px; }
+  .site-header { flex-wrap: wrap; }
+  .gift-tag { order: 3; flex-basis: calc(100% - 40px); margin: 14px 0 0 30px; font-size: 15px; }
   .choice-row { grid-template-columns: 1fr; }
   .countdown b { font-size: 24px; }
   .site-header { gap: 10px; }
