@@ -1127,7 +1127,7 @@ function openView() {
     h("p", { class: "hero-when" }, h("b", {}, when)),
     h("p", { class: "hero-note" }, "Come back to this page after that to see who you're buying for and where to send it. 🎯"),
     budgetPill(),
-    h("details", { class: "hero-mine" }, h("summary", {}, "🎯 Where your gift goes (check or edit)"), h("div", { id: "myDelivery" })),
+    h("details", { class: "hero-mine" }, h("summary", {}, "🏠 Your address for your Secret Santa (check or edit)"), h("div", { id: "myDelivery" })),
     h("p", { class: "muted" }, "Logged in as ", h("b", {}, S.me.name), " · ",
       h("button", { class: "link-btn", type: "button", onclick: logout }, "log out")),
   )];
@@ -1135,7 +1135,7 @@ function openView() {
 
 function myDeliveryCard() {
   return h("section", { class: "card", id: "myDeliveryCard" },
-    h("h2", {}, "🎯 Where your gift goes"),
+    h("h2", {}, "🏠 Your address for your Secret Santa"),
     h("div", { id: "myDelivery" }));
 }
 function updateMyDelivery() {
@@ -1143,7 +1143,7 @@ function updateMyDelivery() {
   if (!box) return;
   const p = S.myPrivate;
   const view = () => box.replaceChildren(...[
-    p ? h("p", {}, p.deliveryType === "physical" ? "📦 Shipping to:" : "💻 Virtual gift via:") : h("p", { class: "error" }, "You haven't said where to send your gift yet!"),
+    p ? h("p", {}, p.deliveryType === "physical" ? "📦 Your address (where your Secret Santa sends your gift):" : "💻 Your virtual handle (where your Secret Santa sends your gift):") : h("p", { class: "error" }, "You haven't told your Secret Santa where to send your gift yet!"),
     p ? h("div", { class: "delivery" }, p.deliveryInfo) : null,
     S.phase === "open" ? h("button", { class: "btn small yellow", type: "button", style: "margin-top:12px", onclick: edit }, p ? "Edit" : "Add it") : null,
   ].filter(Boolean));
@@ -1296,7 +1296,7 @@ function santaView() {
 
   if (S.phase === "drawn") {
     out.push(h("section", { class: "card", "data-col": "b" },
-      h("h3", {}, "Your own gift goes to:"),
+      h("h3", {}, "🏠 Your address (where your Secret Santa sends your gift):"),
       h("div", { id: "myDelivery" })));
     queueMicrotask(updateMyDelivery);
   }
