@@ -778,3 +778,51 @@ body.wizard-mode .site-header { display: none; }
 .done-card { justify-items: center; }
 .done-card .countdown { justify-content: center; }
 .done-when { font-size: 20px; }
+
+/* =====================================================================
+   Start page intro card: the Flavor Town photo + how it works
+   ===================================================================== */
+body.landing .site-header .banner { visibility: hidden; }
+.card.intro-card { padding: 0 0 18px; overflow: hidden; display: flex; flex-direction: column; gap: 14px; justify-content: flex-start; }
+.card.intro-card > :not(.intro-photo) { margin-left: 20px; margin-right: 20px; }
+.intro-photo { position: relative; border-bottom: 4px solid var(--ink); background: var(--ink); line-height: 0; }
+.intro-photo img { display: block; width: 100%; height: auto; }
+.photo-sticker {
+  position: absolute; left: 14px; bottom: -14px;
+  font-family: var(--display); font-size: 13px; line-height: 1;
+  background: var(--pink); color: #fff;
+  border: 3px solid var(--ink); border-radius: 999px;
+  padding: 6px 12px; box-shadow: var(--shadow-sm);
+  transform: rotate(-3deg);
+}
+.intro-card h1 { margin-top: 8px; margin-bottom: 0; }
+.how-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.how-step {
+  display: grid; gap: 4px; align-content: start;
+  border: 3px solid var(--ink); border-radius: 12px;
+  padding: 10px 12px; box-shadow: var(--shadow-sm);
+  font-size: 15px; line-height: 1.3;
+}
+.how-step b { font-family: var(--display); font-weight: 400; font-size: 16px; }
+.how-icon { font-size: 26px; line-height: 1; }
+.how-step.red { background: var(--pink); color: #fff; transform: rotate(-1.5deg); }
+.how-step.green { background: #c9f2d6; transform: rotate(1deg); }
+.how-step.gold { background: var(--yellow); transform: rotate(-.5deg); }
+.turkey-strip {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--blue); color: #fff;
+  border: 3px solid var(--ink); border-radius: 12px;
+  padding: 10px 14px; font-weight: 700; box-shadow: var(--shadow-sm);
+}
+.turkey-strip-amt { font-family: var(--display); color: var(--yellow); font-size: 22px; text-shadow: 2px 2px 0 var(--ink); }
+@media (max-width: 760px) {
+  body.landing .site-header .banner { display: none; }
+  .how-steps { grid-template-columns: 1fr; }
+}
+.intro-photo img { aspect-ratio: 2000 / 660; object-fit: cover; object-position: 50% 50%; }
+.how-step { grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; }
+.how-step > span:last-child { grid-column: 1 / -1; }
+.how-icon { font-size: 22px; }
+@media (min-width: 900px) {
+  body.landing .col > .card.yellow { display: flex; flex-direction: column; justify-content: center; }
+}

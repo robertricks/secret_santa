@@ -307,14 +307,23 @@ function renderLanding() {
   });
 
   layout([
-    h("section", { class: "card tilt-l fill" },
-      h("span", { class: "big-emoji" }, "🎁🎄🦃"),
+    h("section", { class: "card tilt-l fill intro-card" },
+      h("div", { class: "intro-photo" },
+        h("img", { src: "assets/banner.jpg", width: 2000, height: 781, alt: "The Flavor Town crew's avatars in a colosseum, cheering two Santa-hatted warriors in a lightsaber duel" }),
+        h("span", { class: "photo-sticker" }, "🎄 THE FLAVOR TOWN CREW 🎄")),
       h("h1", {}, "SECRET SANTA FOR THE GROUP CHAT"),
-      h("p", {}, "Everyone signs up with a name and a PIN. On draw day the site secretly matches everyone up. You see who you're buying for and where to send it. On reveal day we find out who had whom, in the most dramatic way possible."),
-      h("p", {}, h("b", {}, `$${BUDGET} max.`), " Go over and you get dragged to Turkey Court."),
+      h("div", { class: "how-steps" },
+        h("div", { class: "how-step red" }, h("span", { class: "how-icon" }, "📝"), h("b", {}, "1. JOIN"), h("span", {}, "Name + PIN. Pick 📦 address or 💻 virtual.")),
+        h("div", { class: "how-step green" }, h("span", { class: "how-icon" }, "🎲"), h("b", {}, "2. DRAW DAY"), h("span", {}, "Everyone gets secretly matched.")),
+        h("div", { class: "how-step gold" }, h("span", { class: "how-icon" }, "🥁"), h("b", {}, "3. REVEAL DAY"), h("span", {}, "Who had whom, as dramatically as possible."))),
+      h("div", { class: "turkey-strip" },
+        h("span", { class: "turkey-strip-amt" }, `$${BUDGET} MAX`),
+        h("span", {}, "Go over and you get dragged to Turkey Court 🦃⚖️")),
     ),
     h("section", { class: "card yellow tilt-r", "data-col": "b" }, h("h2", {}, "Start a new Secret Santa"), form),
   ]);
+  // The photo lives in the intro card on this page, so the header keeps just the logo and tag.
+  document.body.classList.add("landing");
 }
 
 // ======================================================================
