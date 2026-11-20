@@ -934,3 +934,4 @@ body.landing .site-header .banner { visibility: hidden; }
 }
 .deadline-icon { font-size: 26px; flex-shrink: 0; }
 .giftee-hero .deadline-note { margin: 12px auto 0; }
+.draft-status { margin: 0; font-size: 14px; font-weight: 700; background: #fff4cc; border: 2px dashed var(--ink); border-radius: 10px; padding: 6px 10px; }

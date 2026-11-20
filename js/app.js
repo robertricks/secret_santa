@@ -10,7 +10,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 import { firebaseConfig, BUDGET, MIN_PLAYERS, MAX_PLAYERS } from "./config.js";
-import { makeDraw, shuffle } from "./draw.js";
+import { makeDraw, shuffle, applyDraft } from "./draw.js";
 import { roastFor } from "./roasts.js";
 import { confetti } from "./fx.js";
 
@@ -143,6 +143,7 @@ const pad2 = (n) => String(n).padStart(2, "0");
 const toLocalInput = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 const sameMinute = (a, b) => Math.floor(a.getTime() / 60000) === Math.floor(b.getTime() / 60000);
 const eventRef = () => doc(db, "events", eventId);
+const draftRef = () => doc(db, "events", eventId, "draft", "pairs");
 
 // A button that needs a second click to confirm (no browser pop-ups).
 function confirmBtn(label, confirmLabel, cls, action) {
@@ -750,6 +751,7 @@ function adminView() {
   if (S.phase === "open") out.push(shareCard());
   if (S.phase === "drawing") out.push(...drawingView());
   out.push(adminSettingsCard());
+  if (S.phase === "open") out.push(adminDraftCard());
   out.push(h("section", { class: "card", "data-col": "b" },
     h("h2", {}, "👥 PLAYERS (", h("span", { id: "peopleCount" }, String(S.participants.length)), ")"),
     h("p", { class: "muted" }, drawn
@@ -920,6 +922,129 @@ async function peekGiftee(p, out) {
   out.replaceChildren(h("div", { class: "delivery", style: "margin-top:8px" },
     `${p.name} is buying for ${nameOf(g)}\n`,
     info ? `${info.deliveryType === "physical" ? "📦 " : "💻 "}${info.deliveryInfo}` : "(no delivery info yet)"));
+}
+
+// ---------------------------------------------------------------------
+// Organizer: hidden draft matches before the draw. Players can't read the
+// draft; at the draw it becomes the real matches (newcomers slotted in).
+// ---------------------------------------------------------------------
+function adminDraftCard() {
+  const body = h("div", { class: "reassign-body" });
+  const det = h("details", { class: "reassign" },
+    h("summary", {}, "Show / edit the draft matches (spoilers!)"), body);
+  det.addEventListener("toggle", () => { if (det.open) loadDraft(body); else queueFit(); });
+  return h("section", { class: "card" },
+    h("h2", {}, "📝 DRAFT MATCHES"),
+    h("p", { class: "muted" }, `Optional. Make hidden matches now and tweak them. Players see nothing until the draw (${fmtDate(toDate(S.event.drawAt))}); then your draft becomes the real matches. No draft = fully random draw.`),
+    det);
+}
+
+async function loadDraft(body) {
+  body.replaceChildren(h("p", { class: "muted" }, "Loading draft…"));
+  let draft;
+  try {
+    const d = await getDoc(draftRef());
+    draft = d.exists() ? d.data().santaOf || {} : null;
+  } catch (e) {
+    body.replaceChildren(h("p", { class: "error" }, "Couldn't load the draft: " + e.message));
+    return;
+  }
+  const people = S.participants;
+  const ids = people.map((p) => p.id);
+  const pairs = [];
+  for (const p of people) for (const x of p.exclusions || []) if (ids.includes(x)) pairs.push([p.id, x]);
+  const types = giftTypes(people);
+  const byId = new Map(people.map((p) => [p.id, p]));
+  const toSantaOf = (assign) => { const o = {}; for (const [sa, g] of assign) o[g] = sa; return o; };
+  const save = async (santaOf, msg) => {
+    await setDoc(draftRef(), { santaOf, updatedAt: serverTimestamp() });
+    if (msg) toast(msg);
+    loadDraft(body);
+  };
+  const generate = async () => {
+    if (people.length < MIN_PLAYERS) { toast(`Need at least ${MIN_PLAYERS} players first.`); return; }
+    const assign = makeDraw(ids, pairs, types);
+    if (!assign) { toast("No valid matches with these 🚫 pairs."); return; }
+    await save(toSantaOf(assign), "Draft made. Only you can see it.");
+  };
+
+  if (!draft) {
+    body.replaceChildren(
+      h("p", {}, "No draft yet, so the draw will be fully random."),
+      h("button", { class: "btn yellow small", type: "button", onclick: generate }, "🎲 Make draft matches"));
+    queueFit();
+    return;
+  }
+
+  const asg = new Map(Object.entries(draft).map(([g, sa]) => [sa, g])); // santa -> giftee
+  const santaOf = new Map(Object.entries(draft)); // giftee -> santa
+  const newcomers = people.filter((p) => !asg.has(p.id));
+  const gone = [...asg.keys()].filter((id) => !byId.has(id));
+  const tag = (id) => (types.get(id) === "physical" ? "📦 " : types.get(id) === "virtual" ? "💻 " : "");
+  const excluded = (a, b) => (byId.get(a)?.exclusions || []).includes(b) || (byId.get(b)?.exclusions || []).includes(a);
+  const inDraft = people.filter((p) => asg.has(p.id));
+
+  const status = [];
+  if (newcomers.length) status.push(`Joined after the draft: ${newcomers.map((p) => p.name).join(", ")}. They'll be slotted in automatically at the draw, or fit them in now.`);
+  if (gone.length) status.push(`${gone.length} ${gone.length === 1 ? "person" : "people"} in the draft left the event; they'll be taken out automatically.`);
+
+  const rows = inDraft.map((p) => {
+    const cur = asg.get(p.id);
+    const warn = [];
+    if (!byId.has(cur)) warn.push("their giftee left");
+    else {
+      if (excluded(p.id, cur)) warn.push("🚫 pair");
+      if (asg.get(cur) === p.id) warn.push("have each other");
+      if (types.get(p.id) && types.get(cur) && types.get(p.id) !== types.get(cur)) warn.push("📦/💻 mixed");
+    }
+    const sel = h("select", { class: "reassign-pick", "aria-label": `Who ${p.name} buys for` },
+      byId.has(cur) ? null : h("option", { value: cur, selected: true }, "(left the event)"),
+      ...inDraft.filter((o) => o.id !== p.id).map((o) => h("option", { value: o.id, selected: o.id === cur }, tag(o.id) + o.name)));
+    sel.addEventListener("change", async () => {
+      const A = p.id, X = cur, Y = sel.value;
+      const B = santaOf.get(Y);
+      if (!B || B === X) {
+        toast(`That swap would make ${nameOf(X)} buy for themselves. Pick someone else.`);
+        sel.value = cur;
+        return;
+      }
+      sel.disabled = true;
+      try {
+        await updateDoc(draftRef(), { [`santaOf.${Y}`]: A, [`santaOf.${X}`]: B, updatedAt: serverTimestamp() });
+        toast(`Draft: ${nameOf(A)} → ${nameOf(Y)}, and ${nameOf(B)} → ${nameOf(X)}.`);
+      } catch (e) {
+        toast("Couldn't change the draft: " + e.message);
+      }
+      loadDraft(body);
+    });
+    return h("div", { class: "reassign-row" },
+      h("b", {}, tag(p.id) + p.name),
+      h("span", { class: "muted" }, "buys for →"),
+      sel,
+      warn.length ? h("span", { class: "reassign-warn" }, "⚠️ " + warn.join(", ")) : null);
+  });
+
+  body.replaceChildren(
+    ...status.map((t) => h("p", { class: "draft-status" }, t)),
+    ...rows,
+    h("div", { class: "row" },
+      newcomers.length || gone.length
+        ? h("button", {
+          class: "btn yellow small", type: "button",
+          onclick: async () => {
+            const fitted = applyDraft(draft, ids, pairs, types);
+            if (!fitted) { toast("Couldn't fit everyone in. Try Reshuffle."); return; }
+            await save(toSantaOf(fitted), "Everyone's in the draft now.");
+          },
+        }, "🧩 Fit everyone into the draft")
+        : null,
+      confirmBtn("🔄 Reshuffle", "Replace the whole draft?", "ghost", generate),
+      confirmBtn("🗑 Discard draft", "Use a random draw instead?", "pink", async () => {
+        await deleteDoc(draftRef());
+        toast("Draft discarded. The draw will be fully random.");
+        loadDraft(body);
+      })));
+  queueFit();
 }
 
 // ---------------------------------------------------------------------
@@ -1205,7 +1330,19 @@ async function runDraw() {
     const ids = people.map((p) => p.id);
     const pairs = [];
     for (const p of people) for (const x of p.exclusions || []) if (ids.includes(x)) pairs.push([p.id, x]);
-    const assign = makeDraw(ids, pairs, giftTypes(people));
+    // Use the organizer's draft if there is one (newcomers get slotted in), else draw fresh.
+    let usedDraft = false;
+    let assign = null;
+    try {
+      const d = await getDoc(draftRef());
+      if (d.exists()) {
+        usedDraft = true;
+        assign = applyDraft(d.data().santaOf, ids, pairs, giftTypes(people));
+      }
+    } catch (e) {
+      console.warn("draft not readable", e.code);
+    }
+    if (!assign) assign = makeDraw(ids, pairs, giftTypes(people));
     if (!assign) {
       S.drawError = "impossible";
       return;
@@ -1226,6 +1363,7 @@ async function runDraw() {
       const santaOf = {};
       for (const [s, g] of assign) santaOf[g] = s;
       tx.set(doc(db, "events", eventId, "reveal", "pairs"), { santaOf });
+      if (usedDraft) tx.delete(draftRef()); // the draft has done its job; don't leave the matches lying around
       tx.update(eventRef, { status: "drawn", drawnAt: serverTimestamp(), count: ids.length });
     });
   } catch (e) {

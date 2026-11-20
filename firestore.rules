@@ -113,6 +113,18 @@ service cloud.firestore {
         allow delete: if isAdmin(e);
       }
 
+      // Organizer's hidden draft matches (before the draw). Only the organizer can read
+      // them, except for the moment of the draw itself, when the drawing browser uses
+      // them and deletes them in the same step.
+      match /draft/{docId} {
+        allow read: if docId == 'pairs' && (isAdmin(e)
+          || (isMember(e) && ev(e).status == 'open' && request.time >= ev(e).drawAt));
+        allow create, update: if docId == 'pairs' && isAdmin(e) && ev(e).status == 'open'
+          && request.resource.data.keys().hasOnly(['santaOf', 'updatedAt'])
+          && request.resource.data.santaOf is map;
+        allow delete: if docId == 'pairs' && ((isAdmin(e) && ev(e).status == 'open') || drawingNow(e));
+      }
+
       match /reveal/{docId} {
         allow read: if docId == 'pairs' && (request.time >= ev(e).revealAt || isAdmin(e));
         allow create: if docId == 'pairs' && (drawingNow(e) || isAdmin(e))

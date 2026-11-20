@@ -101,3 +101,57 @@ function tryOnce(santas, allowed, isCross, maxCross, avoidMutual) {
   }
   return go(0) ? assign : null;
 }
+
+/**
+ * Turn an organizer's draft into a full, valid draw for the current players.
+ * - People in the draft who are no longer playing are spliced out (their Santa
+ *   takes over their giftee).
+ * - People who joined after the draft are slotted into the chain where they fit
+ *   best (respecting exclusions and gift types when possible).
+ * @param {Object<string,string>} santaOfDraft giftee -> santa (as saved in the draft)
+ * @returns {Map<string,string>|null} santa -> giftee, or null if the draft can't be used
+ */
+export function applyDraft(santaOfDraft, ids, exclusionPairs = [], typeOf = new Map()) {
+  const idSet = new Set(ids);
+  const type = typeOf instanceof Map ? (id) => typeOf.get(id) : (id) => typeOf[id];
+  const blocked = new Set();
+  for (const [a, b] of exclusionPairs) { blocked.add(a + "|" + b); blocked.add(b + "|" + a); }
+  const allowed = (s, g) => s !== g && !blocked.has(s + "|" + g);
+  const cross = (s, g) => Boolean(type(s) && type(g) && type(s) !== type(g));
+
+  const next = new Map(); // santa -> giftee
+  for (const [g, s] of Object.entries(santaOfDraft || {})) next.set(s, g);
+  // Splice out anyone no longer playing.
+  const loose = [];
+  for (const x of [...next.keys()]) {
+    if (idSet.has(x) || !next.has(x)) continue;
+    const g = next.get(x);
+    const s = [...next].find(([, gg]) => gg === x)?.[0];
+    next.delete(x);
+    if (s === undefined) continue;
+    if (s === g) { next.delete(s); loose.push(s); } else next.set(s, g);
+  }
+
+  // Slot in newcomers (and anyone knocked loose above).
+  const newcomers = shuffle([...ids.filter((id) => !next.has(id)), ...loose.filter((id) => idSet.has(id) && !next.has(id))]);
+  for (const n of [...new Set(newcomers)]) {
+    if (next.size < 2) return null;
+    let best = null;
+    let bestScore = Infinity;
+    for (const [s, g] of shuffle([...next])) {
+      const score = (allowed(s, n) ? 0 : 10) + (allowed(n, g) ? 0 : 10) + (cross(s, n) ? 1 : 0) + (cross(n, g) ? 1 : 0)
+        + (next.get(g) === n ? 5 : 0);
+      if (score < bestScore) { bestScore = score; best = [s, g]; }
+    }
+    if (!best || bestScore >= 10) return null; // no slot that respects the exclusions
+    const [s, g] = best;
+    next.set(s, n);
+    next.set(n, g);
+  }
+
+  // Final check: everyone gives once, gets once, never to themselves.
+  const ok = next.size === idSet.size && [...next.keys()].every((s) => idSet.has(s))
+    && new Set(next.values()).size === next.size && [...next.values()].every((g) => idSet.has(g))
+    && [...next].every(([s, g]) => s !== g);
+  return ok ? next : null;
+}
