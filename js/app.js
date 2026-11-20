@@ -87,6 +87,7 @@ const S = {
   drawing: false,
   drawError: null,
   isAdmin: false,
+  justJoined: false,   // show the wizard's "you're in" screen right after joining
 };
 
 const unsubs = { event: null, participants: null, user: [] };
@@ -430,14 +431,14 @@ function render() {
   const ev = S.event;
   const key = [S.phase, S.user?.uid || "anon", S.isAdmin ? "admin" : S.me ? "member" : "guest",
     a === undefined ? "?" : a ? `asg:${a.gifteeUid}:${a.santaBox}:${a.myBox}` : "noasg",
-    S.drawError || "", S.drawing ? "drawing" : "",
+    S.drawError || "", S.drawing ? "drawing" : "", S.justJoined ? "jj" : "", W.busy ? "busy" : "",
     ev.name, toDate(ev.drawAt)?.getTime(), toDate(ev.revealAt)?.getTime(), ev.status].join("|");
   if (key === currentView) return;
   currentView = key;
 
   let cards;
   if (S.isAdmin) cards = adminView();
-  else if (!S.user || !S.me) cards = guestView();
+  else if (!S.user || !S.me || S.justJoined || W.busy) { showWizard(); return; }
   else if (S.phase === "open") cards = openView();
   else if (S.phase === "drawing") cards = drawingView();
   else cards = santaView();
@@ -460,6 +461,7 @@ function layout(cards, strip = null) {
   const right = cards.filter((c) => c.dataset?.col === "b");
   // Keep a card marked data-first at the very top of its column.
   for (const col of [left, right]) col.sort((x, y) => (y.dataset?.first ? 1 : 0) - (x.dataset?.first ? 1 : 0));
+  document.body.classList.remove("wizard-mode");
   app.classList.toggle("split", right.length > 0);
   if (strip) strip.classList.add("full");
   // A card marked .fill stretches to match the height of the column beside it.
@@ -529,37 +531,151 @@ function shareCard() {
 }
 
 // ---------------------------------------------------------------------
-// Guest (not logged in)
+// Guest wizard: intro splash → name + PIN → how to get your gift → done.
+// Returning players log in from the intro.
 // ---------------------------------------------------------------------
-function guestView() {
+const W = { step: "intro", name: "", pin: "", delivery: null, error: "", busy: false };
+
+function showWizard() {
+  document.body.classList.add("wizard-mode");
+  app.classList.remove("split", "stretch");
   const open = S.phase === "open";
-  const out = [];
-  const created = (() => { try { return localStorage.getItem("ss:created:" + eventId) === "1"; } catch { return false; } })();
-  if (created && open) { const sc = shareCard(); sc.dataset.col = "b"; out.push(sc); }
+  let card;
+  if (S.me && S.justJoined) card = wizDone();
+  else if (W.step === "profile" && open) card = wizProfile();
+  else if (W.step === "delivery" && open) card = wizDelivery();
+  else if (W.step === "login") card = wizLogin();
+  else card = wizIntro(open);
+  app.replaceChildren(h("div", { class: "wizard-wrap" }, h("div", { class: "wizard" }, card)));
+  queueFit();
+}
 
-  const people = h("section", { class: "card", "data-col": "b" },
-    h("h2", {}, "WHO'S IN (", h("span", { id: "peopleCount" }, String(S.participants.length)), ")"),
-    peopleList());
+function goStep(step) {
+  W.step = step;
+  W.error = "";
+  showWizard();
+}
 
-  let mode = open ? "join" : "login";
-  const body = h("div");
-  const tabs = h("div", { class: "tabs" });
-  const drawTabs = () => {
-    tabs.replaceChildren(...[
-      open ? h("button", { class: "tab" + (mode === "join" ? " active" : ""), type: "button", onclick: () => { mode = "join"; drawTabs(); } }, "JOIN") : null,
-      h("button", { class: "tab" + (mode === "login" ? " active" : ""), type: "button", onclick: () => { mode = "login"; drawTabs(); } }, "LOG IN"),
-    ].filter(Boolean));
-    body.replaceChildren(mode === "join" ? joinForm() : loginForm());
-  };
-  drawTabs();
+function wizSteps(n) {
+  return h("div", { class: "steps" }, ...["You", "Your gift", "Done"].map((t, i) =>
+    h("span", { class: i + 1 === n ? "on" : i + 1 < n ? "done" : "" }, `${i + 1}. ${t}`)));
+}
 
-  out.push(h("section", { class: "card pink tilt-r" },
-    !open ? h("p", {}, S.phase === "drawing" ? "Sign-ups are closed. Log in to see who you got." : "Sign-ups are closed. Log in to see your giftee.") : null,
-    tabs, body));
-  out.push(people);
-  out.push(adminLoginCard());
-  queueMicrotask(updatePeople);
-  return out;
+function budgetPill() {
+  return h("div", { class: "budget-pill" }, h("b", {}, "$20 MAX"), " · go over and get roasted like a turkey 🦃🔥");
+}
+
+function wizIntro(open) {
+  const start = () => goStep(open ? "profile" : "login");
+  return h("div", { class: "intro" },
+    h("button", { class: "brand intro-brand", type: "button", onclick: start, "aria-label": open ? "Start joining" : "Log in" },
+      h("span", { class: "logo" }, "SECRET", h("br"), h("span", {}, "SANTA")),
+      h("span", { class: "tagline" }, "A Flavor Town Christmas")),
+    h("div", { class: "event-pill" }, S.event.name),
+    budgetPill(),
+    h("button", { class: "btn pink huge", type: "button", onclick: start },
+      open ? "🎁 TAP TO JOIN" : S.phase === "drawing" ? "🔓 LOG IN (names are being drawn)" : "🔓 LOG IN TO SEE WHO YOU GOT"),
+    open ? h("button", { class: "link-btn intro-link", type: "button", onclick: () => goStep("login") }, "Already joined? Log in") : null,
+    h("div", { class: "intro-org" }, adminLoginCard()),
+  );
+}
+
+function wizProfile() {
+  const err = h("p", { class: "error" }, W.error);
+  const name = h("input", { required: true, maxlength: 30, autocomplete: "nickname", placeholder: "What the group chat calls you" });
+  name.value = W.name;
+  const pinBox = (ac) => h("input", { class: "pin-input", type: "password", inputmode: "numeric", pattern: "[0-9]{6}", minlength: 6, maxlength: 6, required: true, autocomplete: ac, placeholder: "••••••" });
+  const pin = pinBox("new-password");
+  const pin2 = pinBox("new-password");
+  pin.value = pin2.value = W.pin;
+  const form = h("form", { class: "card stack" },
+    wizSteps(1),
+    h("h2", {}, "👋 Who are you?"),
+    h("label", {}, "Your name", name),
+    h("div", { class: "pair" }, h("label", {}, "Pick a 6-digit PIN", pin), h("label", {}, "PIN again", pin2)),
+    h("p", { class: "muted" }, "Remember your PIN! You'll need your name + PIN to come back and see who you got. There's no reset."),
+    err,
+    h("div", { class: "wizard-nav" },
+      h("button", { class: "btn ghost", type: "button", onclick: () => goStep("intro") }, "← Back"),
+      h("button", { class: "btn pink", type: "submit" }, "Next →")));
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const n = name.value.trim().replace(/\s+/g, " ");
+    W.name = n;
+    if (!n) return (err.textContent = "Tell us your name.");
+    if (S.participants.some((p) => p.nameKey === nameKey(n))) return (err.textContent = "Someone already joined with that name. If it's you, go back and log in.");
+    if (!/^\d{6}$/.test(pin.value)) return (err.textContent = "Your PIN must be exactly 6 digits.");
+    if (pin.value !== pin2.value) return (err.textContent = "PINs don't match. Focus.");
+    if (S.participants.length >= MAX_PLAYERS) return (err.textContent = "This event is full.");
+    W.pin = pin.value;
+    goStep("delivery");
+  });
+  setTimeout(() => (W.name ? pin : name).focus(), 0);
+  return form;
+}
+
+function wizDelivery() {
+  const err = h("p", { class: "error" }, W.error);
+  const btn = h("button", { class: "btn pink", type: "submit", disabled: W.busy }, W.busy ? "Joining…" : "🎁 JOIN");
+  const form = h("form", { class: "card stack" },
+    wizSteps(2),
+    h("h2", {}, "🎁 How do you want your present?"),
+    ...deliveryFields(W.delivery || {}),
+    err,
+    h("div", { class: "wizard-nav" },
+      h("button", { class: "btn ghost", type: "button", disabled: W.busy, onclick: () => goStep("profile") }, "← Back"),
+      btn));
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const delivery = { deliveryType: String(fd.get("deliveryType")), deliveryInfo: String(fd.get("deliveryInfo")).trim() };
+    W.delivery = delivery;
+    if (!delivery.deliveryInfo) return (err.textContent = "Tell your Santa where to send it.");
+    W.busy = true;
+    btn.disabled = true;
+    btn.textContent = "Joining…";
+    try {
+      storeName(W.name);
+      const { email, password } = await credsFor(W.name, W.pin);
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      // Only show "you're in" once the server has confirmed the sign-up (not just the local copy).
+      await joinAs(cred.user.uid, W.name, delivery);
+      Object.assign(W, { step: "intro", name: "", pin: "", delivery: null, error: "", busy: false });
+      S.justJoined = true;
+      currentView = null;
+      render();
+      confetti(180);
+    } catch (ex) {
+      console.error(ex);
+      S.justJoined = false;
+      W.busy = false;
+      W.error = friendlyAuthError(ex);
+      showWizard();
+    }
+  });
+  return form;
+}
+
+function wizDone() {
+  const drawAt = toDate(S.event.drawAt);
+  const when = drawAt.toLocaleString(undefined, { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return h("div", { class: "card stack center done-card" },
+    wizSteps(3),
+    h("span", { class: "big-emoji" }, "🎉"),
+    h("h2", {}, `You're in, ${S.me.name}!`),
+    h("p", { class: "done-when" }, "Names get drawn on ", h("b", {}, when), "."),
+    countdownEl(drawAt),
+    h("p", {}, "Come back to this same link after that, log in with your name + PIN, and you'll see who you're buying for and where to send it. 🎯"),
+    budgetPill(),
+    h("p", { class: "muted" }, "Optional: on your page you can mark anyone you shouldn't draw (partner, roommate)."),
+    h("button", { class: "btn yellow", type: "button", onclick: () => { S.justJoined = false; currentView = null; render(); } }, "Go to my page →"));
+}
+
+function wizLogin() {
+  return h("div", { class: "card stack" },
+    h("h2", {}, S.phase === "open" ? "🔓 Welcome back" : "🔓 Log in to see who you got"),
+    loginForm(),
+    h("button", { class: "link-btn", type: "button", onclick: () => goStep("intro") }, "← Back"));
 }
 
 function adminLoginCard() {
@@ -796,47 +912,6 @@ function pinField(name, labelText) {
     h("input", { name, class: "pin-input", type: "password", inputmode: "numeric", pattern: "[0-9]{6}", minlength: 6, maxlength: 6, required: true, autocomplete: name === "pin" ? "current-password" : "new-password", placeholder: "••••••" }));
 }
 
-function joinForm() {
-  const err = h("p", { class: "error" });
-  const form = h("form", { class: "stack" },
-    h("label", {}, "Your name (what your friends know you as)",
-      h("input", { name: "name", required: true, maxlength: 30, autocomplete: "nickname", placeholder: "xX_GiftLord_Xx" })),
-    h("div", { class: "pair" }, pinField("pin", "6-digit PIN (remember it!)"), pinField("pin2", "PIN again")),
-    ...deliveryFields(),
-    err,
-    h("button", { class: "btn yellow huge", type: "submit" }, "🎁 I'M IN"),
-  );
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    err.textContent = "";
-    const fd = new FormData(form);
-    const name = String(fd.get("name")).trim().replace(/\s+/g, " ");
-    const pin = String(fd.get("pin"));
-    if (!/^\d{6}$/.test(pin)) return (err.textContent = "PIN must be exactly 6 digits.");
-    if (pin !== String(fd.get("pin2"))) return (err.textContent = "PINs don't match. Focus.");
-    if (S.participants.some((p) => p.nameKey === nameKey(name))) return (err.textContent = "Someone already has that name. If it's you, use LOG IN.");
-    if (S.participants.length >= MAX_PLAYERS) return (err.textContent = "This event is full.");
-    const deliveryType = String(fd.get("deliveryType"));
-    const deliveryInfo = String(fd.get("deliveryInfo")).trim();
-    if (!deliveryInfo) return (err.textContent = "Tell your Santa where to send it.");
-    const btn = form.querySelector("button");
-    btn.disabled = true;
-    try {
-      storeName(name);
-      const { email, password } = await credsFor(name, pin);
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      await joinAs(cred.user.uid, name, { deliveryType, deliveryInfo });
-      confetti(120);
-      toast("You're in! 🎉");
-    } catch (ex) {
-      console.error(ex);
-      err.textContent = friendlyAuthError(ex);
-      btn.disabled = false;
-    }
-  });
-  return form;
-}
-
 async function joinAs(uid, name, delivery) {
   await setDoc(doc(db, "events", eventId, "participants", uid), {
     name, nameKey: nameKey(name), exclusions: [], joinedAt: serverTimestamp(),
@@ -881,6 +956,8 @@ function loginForm() {
 }
 
 async function logout() {
+  Object.assign(W, { step: "intro", name: "", pin: "", delivery: null, error: "", busy: false });
+  S.justJoined = false;
   await signOut(auth);
   toast("Logged out. Santa has forgotten you (temporarily).");
 }
