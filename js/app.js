@@ -424,10 +424,13 @@ function layout(cards, strip = null) {
   for (const col of [left, right]) col.sort((x, y) => (y.dataset?.first ? 1 : 0) - (x.dataset?.first ? 1 : 0));
   app.classList.toggle("split", right.length > 0);
   if (strip) strip.classList.add("full");
+  // A card marked .fill stretches to match the height of the column beside it.
+  const hasFill = (col) => col.some((c) => c.classList?.contains("fill"));
+  app.classList.toggle("stretch", hasFill(left) || hasFill(right));
   app.replaceChildren(...[
     strip,
-    h("div", { class: "col" }, ...left),
-    right.length ? h("div", { class: "col" }, ...right) : null,
+    h("div", { class: "col" + (hasFill(left) ? " fill-col" : "") }, ...left),
+    right.length ? h("div", { class: "col" + (hasFill(right) ? " fill-col" : "") }, ...right) : null,
   ].filter(Boolean));
 }
 
