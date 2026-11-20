@@ -659,3 +659,10 @@ main { padding-bottom: 10px; }
   .brand { justify-self: start; }
   .site-header .gift-tag { width: auto; margin: 0 8px 0 30px; }
 }
+
+/* A card marked .fill stretches to the height of the column beside it */
+@media (min-width: 900px) {
+  main.split:has(.fill) { align-items: stretch; }
+  .col:has(> .card.fill) { grid-template-rows: 1fr; }
+  .card.fill { height: 100%; display: flex; flex-direction: column; justify-content: center; }
+}

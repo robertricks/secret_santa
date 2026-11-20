@@ -268,7 +268,7 @@ function renderLanding() {
   });
 
   layout([
-    h("section", { class: "card tilt-l" },
+    h("section", { class: "card tilt-l fill" },
       h("span", { class: "big-emoji" }, "🎁🎄🦃"),
       h("h1", {}, "SECRET SANTA FOR THE GROUP CHAT"),
       h("p", {}, "Everyone signs up with a name and a PIN. On draw day the site secretly matches everyone up. You see who you're buying for and where to send it. On reveal day we find out who had whom, in the most dramatic way possible."),
