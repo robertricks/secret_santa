@@ -392,7 +392,16 @@ function startEvent() {
 function subscribeUserData() {
   const uid = S.user.uid;
   unsubs.user.push(onSnapshot(doc(db, "events", eventId, "private", uid),
-    (s) => { S.myPrivate = s.exists() ? s.data() : null; updateMyDelivery(); },
+    (s) => {
+      S.myPrivate = s.exists() ? s.data() : null;
+      updateMyDelivery();
+      // Players who joined before gift types were public: copy the type over (before the draw only).
+      const me = S.participants.find((p) => p.id === uid);
+      if (me && !me.deliveryType && S.myPrivate?.deliveryType && computePhase() === "open") {
+        updateDoc(doc(db, "events", eventId, "participants", uid), { deliveryType: S.myPrivate.deliveryType })
+          .catch((e) => console.warn("type backfill", e.code));
+      }
+    },
     (e) => console.warn("private", e.code)));
   subscribeAssignment();
 }
@@ -861,7 +870,7 @@ async function redraw() {
   if (ids.length < MIN_PLAYERS) { toast(`Need at least ${MIN_PLAYERS} players.`); return; }
   const pairs = [];
   for (const p of S.participants) for (const x of p.exclusions || []) if (ids.includes(x)) pairs.push([p.id, x]);
-  const assign = makeDraw(ids, pairs);
+  const assign = makeDraw(ids, pairs, giftTypes(S.participants));
   if (!assign) { toast("No valid draw with these exclusions."); return; }
   const old = await getDocs(collection(db, "events", eventId, "assignments"));
   const boxOf = new Map(ids.map((id) => [id, randId()]));
@@ -912,9 +921,16 @@ function pinField(name, labelText) {
     h("input", { name, class: "pin-input", type: "password", inputmode: "numeric", pattern: "[0-9]{6}", minlength: 6, maxlength: 6, required: true, autocomplete: name === "pin" ? "current-password" : "new-password", placeholder: "••••••" }));
 }
 
+// Gift type (📦 physical / 💻 virtual) per player, so the draw can keep types together.
+function giftTypes(people) {
+  return new Map(people.filter((p) => p.deliveryType).map((p) => [p.id, p.deliveryType]));
+}
+
 async function joinAs(uid, name, delivery) {
   await setDoc(doc(db, "events", eventId, "participants", uid), {
     name, nameKey: nameKey(name), exclusions: [], joinedAt: serverTimestamp(),
+    // Only the type is public (so the draw can match like with like); the address stays private.
+    ...(delivery ? { deliveryType: delivery.deliveryType } : {}),
   });
   if (delivery) {
     await setDoc(doc(db, "events", eventId, "private", uid), { ...delivery, updatedAt: serverTimestamp() });
@@ -1054,9 +1070,14 @@ function updateMyDelivery() {
       const info = String(fd.get("deliveryInfo")).trim();
       if (!info) return (err.textContent = "Can't be empty.");
       try {
+        const deliveryType = String(fd.get("deliveryType"));
         await setDoc(doc(db, "events", eventId, "private", S.user.uid), {
-          deliveryType: String(fd.get("deliveryType")), deliveryInfo: info, updatedAt: serverTimestamp(),
+          deliveryType, deliveryInfo: info, updatedAt: serverTimestamp(),
         });
+        // Keep the public gift type in sync (only possible before the draw).
+        if (S.phase === "open" && S.me?.deliveryType !== deliveryType) {
+          await updateDoc(doc(db, "events", eventId, "participants", S.user.uid), { deliveryType }).catch((e) => console.warn("type sync", e.code));
+        }
         toast("Saved.");
       } catch (ex) { err.textContent = ex.message; }
     });
@@ -1080,7 +1101,7 @@ async function runDraw() {
     const ids = people.map((p) => p.id);
     const pairs = [];
     for (const p of people) for (const x of p.exclusions || []) if (ids.includes(x)) pairs.push([p.id, x]);
-    const assign = makeDraw(ids, pairs);
+    const assign = makeDraw(ids, pairs, giftTypes(people));
     if (!assign) {
       S.drawError = "impossible";
       return;

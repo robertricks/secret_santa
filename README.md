@@ -11,6 +11,9 @@ A Secret Santa site for the Discord crew. Static files on GitHub Pages + a free 
    choose 📦 shipping address or 💻 virtual → "You're in!" with the draw date and a countdown telling them when to come back.
    On their page they can tick people they shouldn't draw (partner, roommate). Works both ways.
 3. At the draw time, the first person to open the page **automatically runs the draw**. No admin, nobody sees the list.
+   The draw keeps 📦 address people with address people and 💻 virtual people with virtual people. It only crosses
+   types when it has to (a type with just 1–2 people, or "don't draw" exclusions in the way), using as few
+   cross-overs as possible, and it avoids A↔B pairs so nobody can work out who their Santa is.
 4. Everyone **unwraps their giftee** and sees their address/handle, with a big reminder not to go over $20.
 5. On reveal day: **▶ START THE SHOW**, a one-by-one reveal with a name-spinner and confetti, built for screen-sharing in a Discord call.
 6. **Turkey Court**: giftees can charge their Santa with overspending → public roast on the Wall of Shame.
@@ -35,7 +38,7 @@ Whoever starts an event sets an **organizer password**. Log in with it from the 
 |---|---|
 | `index.html`, `styles.css` | the page |
 | `js/app.js` | everything: sign-up, draw, reveal, Turkey Court, organizer mode |
-| `js/draw.js` | the matching algorithm (no self-draws, respects exclusions, avoids A↔B pairs) |
+| `js/draw.js` | the matching algorithm (no self-draws, respects exclusions, keeps gift types together, avoids A↔B pairs) |
 | `js/roasts.js` | Turkey Court roast lines. **Add your own!** |
 | `js/fx.js` | confetti |
 | `js/config.js` | Firebase web config (public by design) |

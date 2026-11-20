@@ -69,7 +69,8 @@ service cloud.firestore {
         allow create: if signedIn() && request.auth.uid == uid
           && ev(e).status == 'open' && request.time < ev(e).drawAt
           && !(uid in ev(e).get('banned', []))
-          && request.resource.data.keys().hasOnly(['name', 'nameKey', 'exclusions', 'joinedAt'])
+          && request.resource.data.keys().hasOnly(['name', 'nameKey', 'exclusions', 'joinedAt', 'deliveryType'])
+          && request.resource.data.get('deliveryType', 'physical') in ['physical', 'virtual']
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 30
           && request.resource.data.nameKey is string && request.resource.data.nameKey.size() <= 30
@@ -77,8 +78,9 @@ service cloud.firestore {
           && request.resource.data.joinedAt == request.time;
         allow update: if signedIn() && request.auth.uid == uid
           && ev(e).status == 'open' && request.time < ev(e).drawAt
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['exclusions'])
-          && request.resource.data.exclusions is list && request.resource.data.exclusions.size() <= 100;
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['exclusions', 'deliveryType'])
+          && request.resource.data.exclusions is list && request.resource.data.exclusions.size() <= 100
+          && request.resource.data.get('deliveryType', 'physical') in ['physical', 'virtual'];
         allow delete: if isAdmin(e)
           || (signedIn() && request.auth.uid == uid && ev(e).status == 'open' && request.time < ev(e).drawAt);
       }
